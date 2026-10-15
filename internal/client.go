@@ -458,11 +458,19 @@ func (c *Client) OnRequestCompleted(rc RequestCompletionCallback) {
 }
 
 // refreshSession shares one refresh result among callers using the expired version.
-func (c *Client) refreshSession(ctx context.Context, version uint64) error {
+func (c *Client) refreshSession(req *http.Request, version uint64) error {
+	ctx := req.Context()
 	c.sessionMu.Lock()
 	if version != c.sessionVersion {
 		c.sessionMu.Unlock()
 		return nil
+	}
+	// Requests built before a completed refresh may still carry older cookies.
+	for _, cookie := range c.cookies {
+		if sent, err := req.Cookie(cookie.Name); err == nil && sent.Value != cookie.Value {
+			c.sessionMu.Unlock()
+			return nil
+		}
 	}
 	if refresh := c.sessionRefresh; refresh != nil {
 		c.sessionMu.Unlock()
@@ -492,8 +500,6 @@ func (c *Client) send(req *http.Request) (*http.Response, error) {
 	if c.credentials.SessionAuth {
 		c.sessionMu.Lock()
 		version = c.sessionVersion
-		clearCookiesInRequest(req)
-		decorateRequestWithCookies(req, c.cookies)
 		c.sessionMu.Unlock()
 	}
 	resp, err := c.httpClient.Do(req)
@@ -504,7 +510,7 @@ func (c *Client) send(req *http.Request) (*http.Response, error) {
 	originalBody := resp.Body
 	_ = CheckResponse(resp)
 	_ = originalBody.Close()
-	if err := c.refreshSession(req.Context(), version); err != nil {
+	if err := c.refreshSession(req, version); err != nil {
 		return nil, err
 	}
 	if req.Body != nil && req.Body != http.NoBody {
