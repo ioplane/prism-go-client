@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	prismgoclient "github.com/nutanix-cloud-native/prism-go-client"
-	"github.com/stretchr/testify/require"
-	"k8s.io/utils/ptr"
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
+
+	prismgoclient "github.com/nutanix-cloud-native/prism-go-client"
 )
 
 func TestListAllPagination(t *testing.T) {
@@ -60,20 +63,26 @@ func TestListAllPagination(t *testing.T) {
 					var offsets []int64
 					mux.HandleFunc("/api/nutanix/v3"+operation.path, func(w http.ResponseWriter, r *http.Request) {
 						var request DSMetadata
-						require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
-						require.Equal(t, "name==keep", ptr.Deref(request.Filter, ""))
-						require.Equal(t, operation.kind, ptr.Deref(request.Kind, ""))
-						require.Equal(t, int64(100), ptr.Deref(request.Length, 0))
+						if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&request)) {
+							http.Error(w, "invalid fixture request", http.StatusBadRequest)
+							return
+						}
+						assert.Equal(t, "name==keep", ptr.Deref(request.Filter, ""))
+						assert.Equal(t, operation.kind, ptr.Deref(request.Kind, ""))
+						assert.Equal(t, int64(100), ptr.Deref(request.Length, 0))
 						offset := ptr.Deref(request.Offset, 0)
 						offsets = append(offsets, offset)
 						count := min(int64(100), total-offset)
-						require.GreaterOrEqual(t, count, int64(0))
+						if !assert.GreaterOrEqual(t, count, int64(0)) {
+							http.Error(w, "invalid fixture offset", http.StatusBadRequest)
+							return
+						}
 						entities := make([]map[string]any, 0, count)
 						for i := int64(0); i < count; i++ {
 							id := fmt.Sprintf("item-%d", offset+i)
 							entities = append(entities, map[string]any{"metadata": map[string]any{"uuid": id}, "value": id, "uuid": id, "address_group": map[string]any{"name": id}})
 						}
-						require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"offset": offset, "length": count, "total_matches": total}, "entities": entities}))
+						assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"offset": offset, "length": count, "total_matches": total}, "entities": entities}))
 					})
 					response, err := operation.list(context.Background(), Operations{client: client})
 					require.NoError(t, err)
@@ -106,7 +115,10 @@ func TestListAllSubnetFilteredPages(t *testing.T) {
 	var offsets []int64
 	mux.HandleFunc("/api/nutanix/v3/subnets/list", func(w http.ResponseWriter, r *http.Request) {
 		var request DSMetadata
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&request)) {
+			http.Error(w, "invalid fixture request", http.StatusBadRequest)
+			return
+		}
 		offset := ptr.Deref(request.Offset, 0)
 		offsets = append(offsets, offset)
 		entities := make([]map[string]any, 0)
@@ -117,7 +129,7 @@ func TestListAllSubnetFilteredPages(t *testing.T) {
 			}
 			entities = append(entities, map[string]any{"metadata": map[string]any{"uuid": fmt.Sprint(i)}, "status": map[string]any{"name": name}})
 		}
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"offset": offset, "length": len(entities), "total_matches": 201}, "entities": entities}))
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"offset": offset, "length": len(entities), "total_matches": 201}, "entities": entities}))
 	})
 	response, err := (Operations{client: client}).ListAllSubnet(context.Background(), "", []*prismgoclient.AdditionalFilter{{Name: "name", Values: []string{"keep"}}})
 	require.NoError(t, err)
@@ -129,35 +141,57 @@ func TestListAllSubnetFilteredPages(t *testing.T) {
 func TestListAllInvalidPagination(t *testing.T) {
 	for _, test := range []struct {
 		name, first, second string
-		calls               int
+		calls, countDelta   int
 	}{
-		{"nil_metadata", `null`, `null`, 1},
-		{"missing_total", `{"offset":0,"length":0}`, `null`, 1},
-		{"missing_length", `{"offset":0,"total_matches":101}`, `null`, 1},
-		{"missing_offset", `{"length":100,"total_matches":101}`, `null`, 1},
-		{"negative_total", `{"offset":0,"length":0,"total_matches":-1}`, `null`, 1},
-		{"negative_length", `{"offset":0,"length":-1,"total_matches":101}`, `null`, 1},
-		{"wrong_offset", `{"offset":1,"length":100,"total_matches":101}`, `null`, 1},
-		{"oversized_length", `{"offset":0,"length":101,"total_matches":101}`, `null`, 1},
-		{"length_beyond_total", `{"offset":0,"length":2,"total_matches":1}`, `null`, 1},
-		{"nonprogress", `{"offset":0,"length":0,"total_matches":101}`, `null`, 1},
-		{"repeated_page", `{"offset":0,"length":100,"total_matches":101}`, `{"offset":0,"length":1,"total_matches":101}`, 2},
-		{"changed_total", `{"offset":0,"length":100,"total_matches":101}`, `{"offset":100,"length":1,"total_matches":102}`, 2},
+		{"nil_metadata", `null`, `null`, 1, 0},
+		{"missing_total", `{"offset":0,"length":0}`, `null`, 1, 0},
+		{"missing_length", `{"offset":0,"total_matches":101}`, `null`, 1, 0},
+		{"missing_offset", `{"length":100,"total_matches":101}`, `null`, 1, 0},
+		{"negative_total", `{"offset":0,"length":0,"total_matches":-1}`, `null`, 1, 0},
+		{"negative_length", `{"offset":0,"length":-1,"total_matches":101}`, `null`, 1, 0},
+		{"wrong_offset", `{"offset":1,"length":100,"total_matches":101}`, `null`, 1, 0},
+		{"oversized_length", `{"offset":0,"length":101,"total_matches":101}`, `null`, 1, 0},
+		{"length_beyond_total", `{"offset":0,"length":2,"total_matches":1}`, `null`, 1, 0},
+		{"nonprogress", `{"offset":0,"length":0,"total_matches":101}`, `null`, 1, 0},
+		{"repeated_page", `{"offset":0,"length":100,"total_matches":101}`, `{"offset":0,"length":1,"total_matches":101}`, 2, 0},
+		{"changed_total", `{"offset":0,"length":100,"total_matches":101}`, `{"offset":100,"length":1,"total_matches":102}`, 2, 0},
+		{"missing_entities", `{"offset":0,"length":1,"total_matches":1}`, `null`, 1, -1},
+		{"excess_entities", `{"offset":0,"length":1,"total_matches":1}`, `null`, 1, 1},
+		{"filtered_excess_entities", `{"offset":0,"length":1,"total_matches":1}`, `null`, 1, 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			mux, client, server := setup(t)
 			defer server.Close()
 			calls := 0
-			mux.HandleFunc("/api/nutanix/v3/vms/list", func(w http.ResponseWriter, r *http.Request) {
+			path := "/api/nutanix/v3/vms/list"
+			if test.name == "filtered_excess_entities" {
+				path = "/api/nutanix/v3/subnets/list"
+			}
+			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 				calls++
 				metadata := test.first
 				if calls > 1 {
 					metadata = test.second
 				}
-				_, _ = fmt.Fprintf(w, `{"metadata":%s,"entities":[]}`, metadata)
+				var page ListMetadataOutput
+				assert.NoError(t, json.Unmarshal([]byte(metadata), &page))
+				count := max(int(ptr.Deref(page.Length, 0))+test.countDelta, 0)
+				entities := make([]map[string]any, count)
+				for i := range entities {
+					entities[i] = map[string]any{"metadata": map[string]any{"uuid": fmt.Sprint(i)}, "status": map[string]any{"name": "keep"}}
+				}
+				rawEntities, err := json.Marshal(entities)
+				assert.NoError(t, err)
+				_, _ = fmt.Fprintf(w, `{"metadata":%s,"entities":%s}`, metadata, rawEntities)
 			})
 			require.NotPanics(t, func() {
-				response, err := (Operations{client: client}).ListAllVM(context.Background(), "")
+				var response any
+				var err error
+				if test.name == "filtered_excess_entities" {
+					response, err = (Operations{client: client}).ListAllSubnet(context.Background(), "", []*prismgoclient.AdditionalFilter{{Name: "name", Values: []string{"keep"}}})
+				} else {
+					response, err = (Operations{client: client}).ListAllVM(context.Background(), "")
+				}
 				require.Error(t, err)
 				require.Nil(t, response)
 			})
@@ -173,7 +207,11 @@ func TestListAllCancellationAndHTTPError(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/vms/list", func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		if calls == 1 {
-			_, _ = fmt.Fprint(w, `{"metadata":{"offset":0,"length":100,"total_matches":101},"entities":[]}`)
+			entities := make([]map[string]any, 100)
+			for i := range entities {
+				entities[i] = map[string]any{"metadata": map[string]any{"uuid": fmt.Sprint(i)}}
+			}
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"offset": 0, "length": 100, "total_matches": 101}, "entities": entities}))
 			return
 		}
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -198,14 +236,17 @@ func TestListAllHostSingleRequest(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/hosts/list", func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		var request DSMetadata
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
-		require.Nil(t, request.Length)
-		require.Nil(t, request.Offset)
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&request)) {
+			http.Error(w, "invalid fixture request", http.StatusBadRequest)
+			return
+		}
+		assert.Nil(t, request.Length)
+		assert.Nil(t, request.Offset)
 		entities := make([]map[string]any, 201)
 		for i := range entities {
 			entities[i] = map[string]any{"metadata": map[string]any{"uuid": fmt.Sprint(i)}}
 		}
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"entities": entities}))
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"entities": entities}))
 	})
 	response, err := (Operations{client: client}).ListAllHost(context.Background())
 	require.NoError(t, err)
@@ -236,7 +277,7 @@ func TestListAllPageRequestPreservation(t *testing.T) {
 	filters := []*prismgoclient.AdditionalFilter{{Name: "name", Values: []string{"keep"}}}
 	request := DSMetadata{Filter: ptr.To("name==keep"), Kind: ptr.To("subnet"), SortAttribute: ptr.To("name"), SortOrder: ptr.To("ASCENDING"), ClientSideFilters: filters}
 	calls := 0
-	err := listAllPages(context.Background(), request, func(page *DSMetadata) (*ListMetadataOutput, error) {
+	err := listAllPages(context.Background(), request, func(page *DSMetadata) (*ListMetadataOutput, int, error) {
 		require.Equal(t, request.Filter, page.Filter)
 		require.Equal(t, request.Kind, page.Kind)
 		require.Equal(t, request.SortAttribute, page.SortAttribute)
@@ -245,7 +286,7 @@ func TestListAllPageRequestPreservation(t *testing.T) {
 		require.Equal(t, int64(100), *page.Length)
 		require.Equal(t, int64(calls*50), *page.Offset)
 		calls++
-		return &ListMetadataOutput{Offset: page.Offset, Length: ptr.To(int64(50)), TotalMatches: ptr.To(int64(150))}, nil
+		return &ListMetadataOutput{Offset: page.Offset, Length: ptr.To(int64(50)), TotalMatches: ptr.To(int64(150))}, 50, nil
 	})
 	require.NoError(t, err)
 	require.Equal(t, 3, calls)
@@ -262,7 +303,11 @@ func TestListAllCancellationBetweenPages(t *testing.T) {
 	client.OnRequestCompleted(func(*http.Request, *http.Response, interface{}) { cancel() })
 	mux.HandleFunc("/api/nutanix/v3/vms/list", func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		_, _ = fmt.Fprint(w, `{"metadata":{"offset":0,"length":100,"total_matches":101},"entities":[]}`)
+		entities := make([]map[string]any, 100)
+		for i := range entities {
+			entities[i] = map[string]any{"metadata": map[string]any{"uuid": fmt.Sprint(i)}}
+		}
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"offset": 0, "length": 100, "total_matches": 101}, "entities": entities}))
 	})
 	response, err := (Operations{client: client}).ListAllVM(ctx, "")
 	require.ErrorIs(t, err, context.Canceled)

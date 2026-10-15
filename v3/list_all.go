@@ -10,7 +10,7 @@ import (
 )
 
 // listAllPages advances by raw response length, including entities removed by client-side filters.
-func listAllPages(ctx context.Context, request DSMetadata, fetch func(*DSMetadata) (*ListMetadataOutput, error)) error {
+func listAllPages(ctx context.Context, request DSMetadata, fetch func(*DSMetadata) (*ListMetadataOutput, int, error)) error {
 	var offset, total int64
 	request.Length = ptr.To(itemsPerPage)
 	for {
@@ -18,7 +18,7 @@ func listAllPages(ctx context.Context, request DSMetadata, fetch func(*DSMetadat
 			return err
 		}
 		request.Offset = ptr.To(offset)
-		metadata, err := fetch(&request)
+		metadata, count, err := fetch(&request)
 		if err != nil {
 			return err
 		}
@@ -28,6 +28,10 @@ func listAllPages(ctx context.Context, request DSMetadata, fetch func(*DSMetadat
 		matches, length := *metadata.TotalMatches, *metadata.Length
 		if matches < 0 || *metadata.Offset != offset || length < 0 || length > itemsPerPage || offset > matches || length > matches-offset {
 			return fmt.Errorf("invalid list pagination metadata")
+		}
+		observed := int64(count)
+		if observed < 0 || observed > length || (len(request.ClientSideFilters) == 0 && observed != length) {
+			return fmt.Errorf("list pagination entity count does not match metadata")
 		}
 		if offset == 0 {
 			total = matches
