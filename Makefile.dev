@@ -1,5 +1,6 @@
 PODMAN ?= podman
 DEV_IMAGE ?= localhost/ioplane-prism-go-client:dev
+SOURCE_REVISION := $(shell git rev-parse HEAD)
 DEV_RUN = $(PODMAN) run --rm -v $(CURDIR):/src:z -w /src \
 	-v ioplane-nutanix-driver-go-modules:/cache/modules \
 	-v ioplane-nutanix-driver-go-build:/cache/build $(DEV_IMAGE)
@@ -10,7 +11,7 @@ KEPLOY_KONNECTOR = TestKonnector(CreateClusterRegistration|UpdateClusterRegistra
 
 .PHONY: dev-build regression unit unit-all vet fmt-check build mod-check vuln check
 dev-build:
-	$(PODMAN) build -t $(DEV_IMAGE) -f Containerfile.dev .
+	$(PODMAN) build --build-arg SOURCE_REVISION=$(SOURCE_REVISION) -t $(DEV_IMAGE) -f Containerfile.dev .
 regression:
 	$(DEV_RUN) go test -race -count=5 -run 'TestNewClient(TransportIsolation|UnsupportedDefaultTransport)$$' ./internal
 unit:
