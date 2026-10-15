@@ -100,3 +100,36 @@ helper driver; `go:S3776` в SDK transport test относится к cognitive 
 `docker:S8431` рекомендует убрать сочетание tag+digest; обязательный immutable
 pin с читаемой версией сохраняется. Findings зарегистрированы в
 `um-docs-nrsu.6.10.6`; suppression и отключение checks не выполняются.
+
+
+## Контракт response boundary: этап v4
+
+`um-docs-nrsu.4.8.6`: decoded/filtered JSON ограничивается 64 MiB, error body —
+64 KiB. Это политика SDK, не лимит Nutanix API. Читается максимум budget+1
+байт для обнаружения превышения; Content-Length не считается доверенным.
+Нефильтрованный io.Writer остаётся потоковым. JSON больше budget требует
+пагинации или отдельного согласованного контракта; unlimited option не добавляется.
+
+Обычный Error/log не содержит server message, details, body, произвольный HTTP
+status text или JSON field names. Публичный ResponseError сохраняет числовой
+StatusCode и Unwrap; ErrResponseTooLarge доступен через errors.Is. Изменение
+текста diagnostics несовместимо со сравнением server messages как strings;
+потребители переходят на errors.As/Is. Existing converged/v4 categories не меняются.
+
+Сохранить оригинального владельца Body.Close, cancellation и streaming; не
+добавлять retry мутаций. Источники: Context7 /golang/go; Go 1.27 release notes
+(golang/website blob2d38a2be7836deca1d17451c6e03dd444f282847) и io.LimitReader
+в golang/go go1.27.2. Новых dependencies и toolchain upgrades нет.
+
+
+Измерено локально: полный `Makefile.dev check` успешен, SDK lint — 0 issues.
+RED воспроизводит marker в пяти error forms и журнале; JSON 67108892 bytes
+принимается сверх budget; error body читает 65538 bytes. GREEN ограничивает
+чтение budget+1 и сохраняет typed status/size/cancel/JSON causes. Старые
+message-string assertions заменены проверкой ResponseError.StatusCode.
+
+Public API сравнен по тем же 15 public packages W0: 14 без изменений; root
+аддитивно содержит ResponseError, ErrResponseTooLarge и Error/Unwrap. Старый
+W0 text hash не является текущим hash; Go binary ABI из этого сравнения не выводится.
+Тексты diagnostics и ограничения body требуют consumer migration; SDK commit
+помечается breaking. Internal/v4/converged error categories не переименовываются.
