@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/httptrace"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -38,12 +39,37 @@ func baselinePayload(b *testing.B, count int) []byte {
 type baselineTransport struct {
 	payload []byte
 	calls   int
+	auth    int
 }
 
 func (t *baselineTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	t.calls++
-	return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header),
+	header := make(http.Header)
+	if strings.HasSuffix(r.URL.Path, "/users/me") {
+		t.auth++
+		header.Set("Set-Cookie", "fixture-session=offline; HttpOnly")
+	}
+	return &http.Response{StatusCode: http.StatusOK, Header: header,
 		Body: io.NopCloser(bytes.NewReader(t.payload)), Request: r}, nil
+}
+
+func BenchmarkClientSessionAuth(b *testing.B) {
+	transport := &baselineTransport{}
+	logger := logr.Discard()
+	credentials := &prism.Credentials{URL: "https://fixture.invalid", SessionAuth: true}
+	b.ReportAllocs()
+	for b.Loop() {
+		_, err := internal.NewClient(internal.WithCredentials(credentials),
+			internal.WithUserAgent("offline-baseline"), internal.WithAbsolutePath("api/nutanix/v3"),
+			internal.WithLogger(&logger), internal.WithRoundTripper(transport))
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	if transport.auth != b.N+1 || transport.calls != b.N {
+		b.Fatalf("auth=%d requests=%d, want %d each", transport.auth, transport.calls, b.N)
+	}
+	b.ReportMetric(float64(transport.auth)/float64(b.N), "auth/op")
 }
 
 func baselineClient(b *testing.B, endpoint string, transport http.RoundTripper) *internal.Client {
