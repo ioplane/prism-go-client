@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The independent nusights module uses patched MongoDB v1.17.10; its module-level vulnerability scan is blocking, including vulnerabilities outside imported packages.
 - Standalone SDK dependency advisories are resolved by compatible updates to x/net, AWS S3/eventstream, MongoDB v1 and OAuth2; whole-SDK scanning remains blocking.
 - JSON decode errors retain their cause for errors.Is/errors.As in both request paths.
 - HTTP non-2xx responses always return an error; filtered responses close the original body exactly once and malformed JSON returns an error without panic.
@@ -15,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - New commit titles use English declarative noun phrases; PR review language and inherited commit history remain unchanged.
+- The nusights module now also requires Go 1.27.0 with the pinned Go 1.27.2 toolchain. Consumers of that independent module must upgrade their compiler.
 - The fork requires Go 1.27.0 and pins the Go 1.27.2 development toolchain.
 
 ### Added
