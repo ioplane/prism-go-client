@@ -328,6 +328,9 @@ filtering. FIQL, kind, sort и subnet client-side filters сохраняются
 запросами. Для стабильных полных страниц inventories 0/1/100/101/200/201
 требуют соответственно 1/1/1/2/2/3 запросов; entities не дублируются.
 
+SDK сверяет observed Entities count с raw length: без client-side filters counts
+равны; после subnet filtering observed count не превышает raw length.
+Несоответствие возвращает ошибку вместо неполного inventory.
 SDK отклоняет nil metadata, отсутствие offset/length/total_matches, отрицательные
 значения, несовпадение offset, превышение запрошенной длины или total, отсутствие
 прогресса и изменение total между страницами. Это политика целостности `ListAll`,
@@ -361,7 +364,7 @@ GPU inventory fetch, UUID matcher и consumer pin относятся к след
 Измерено локально в pinned Podman environment: `Makefile.dev check` — exit 0,
 current SDK profile (6 linters) — 0 issues; changed Go files — gofmt clean.
 102 table cases покрывают все 17 paginated wrappers; отдельные fixtures проверяют
-12 malformed metadata shapes, пустые filtered pages, cancellation/HTTP cause,
+15 malformed metadata/count cases, пустые filtered pages, cancellation/HTTP cause,
 sort/filter preservation, nil/empty JSON и host single-fetch. 117 exported
 Operations signatures, Service и host wrapper совпадают с parent
 `031ad8c9d9871ecede484178745a479fd65dd9cf`; binary ABI не измеряется.

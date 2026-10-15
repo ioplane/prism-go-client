@@ -851,18 +851,18 @@ func (op Operations) ListAllVM(ctx context.Context, filter string) (*VMListInten
 	var entities []*VMIntentResource
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("vm"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListVM(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -878,18 +878,18 @@ func (op Operations) ListAllSubnet(ctx context.Context, filter string, clientSid
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("subnet"),
 		ClientSideFilters: clientSideFilters,
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListSubnet(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -904,18 +904,18 @@ func (op Operations) ListAllNetworkSecurityRule(ctx context.Context, filter stri
 	var entities []*NetworkSecurityRuleIntentResource
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("network_security_rule"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListNetworkSecurityRule(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -930,18 +930,18 @@ func (op Operations) ListAllImage(ctx context.Context, filter string) (*ImageLis
 	var entities []*ImageIntentResponse
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("image"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListImage(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -956,18 +956,18 @@ func (op Operations) ListAllCluster(ctx context.Context, filter string) (*Cluste
 	var entities []*ClusterIntentResponse
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("cluster"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListCluster(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -982,21 +982,21 @@ func (op Operations) ListAllCategoryValues(ctx context.Context, categoryName, fi
 	var entities []*CategoryValueStatus
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("category"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListCategoryValues(ctx, categoryName, &CategoryListMetadata{
 			Filter: request.Filter, Kind: request.Kind, Length: request.Length, Offset: request.Offset,
 			SortAttribute: request.SortAttribute, SortOrder: request.SortOrder,
 		})
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return (*ListMetadataOutput)(resp.Metadata), nil
+		return (*ListMetadataOutput)(resp.Metadata), len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -1121,18 +1121,18 @@ func (op Operations) ListAllProject(ctx context.Context, filter string) (*Projec
 	var entities []*Project
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("project"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListProject(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -1239,18 +1239,18 @@ func (op Operations) ListAllAccessControlPolicy(ctx context.Context, filter stri
 	var entities []*AccessControlPolicy
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("access_control_policy"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListAccessControlPolicy(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -1358,18 +1358,18 @@ func (op Operations) ListAllRole(ctx context.Context, filter string) (*RoleListR
 	var entities []*Role
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("role"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListRole(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -1510,18 +1510,18 @@ func (op Operations) ListAllUser(ctx context.Context, filter string) (*UserListR
 	var entities []*UserIntentResponse
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("user"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListUser(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -1590,18 +1590,18 @@ func (op Operations) ListAllUserGroup(ctx context.Context, filter string) (*User
 	var entities []*UserGroupIntentResponse
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("user_group"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListUserGroup(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -1651,18 +1651,18 @@ func (op Operations) ListAllPermission(ctx context.Context, filter string) (*Per
 	var entities []*PermissionIntentResponse
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("permission"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListPermission(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -1704,18 +1704,18 @@ func (op Operations) ListAllProtectionRules(ctx context.Context, filter string) 
 	var entities []*ProtectionRuleResponse
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("protection_rule"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListProtectionRules(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -1812,18 +1812,18 @@ func (op Operations) ListAllRecoveryPlans(ctx context.Context, filter string) (*
 	var entities []*models.RecoveryPlanIntentResource
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("recovery_plan"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListRecoveryPlans(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return recoveryPlanPageMetadata(resp.Metadata), nil
+		return recoveryPlanPageMetadata(resp.Metadata), len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -1910,18 +1910,18 @@ func (op Operations) ListAllServiceGroups(ctx context.Context, filter string) (*
 	var entities []*ServiceGroupListEntry
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("service_group"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.listServiceGroups(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -1970,18 +1970,18 @@ func (op Operations) ListAllAddressGroups(ctx context.Context, filter string) (*
 	var entities []*AddressGroupListEntry
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("address_group"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListAddressGroups(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
@@ -2198,18 +2198,18 @@ func (op Operations) ListAllAvailabilityZones(ctx context.Context, filter string
 	var entities []*AvailabilityZoneIntentResponse
 	err := listAllPages(ctx, DSMetadata{
 		Filter: &filter, Kind: ptr.To("availability_zone"),
-	}, func(request *DSMetadata) (*ListMetadataOutput, error) {
+	}, func(request *DSMetadata) (*ListMetadataOutput, int, error) {
 		var err error
 		resp, err = op.ListAvailabilityZones(ctx, request)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if entities == nil {
 			entities = resp.Entities
 		} else {
 			entities = append(entities, resp.Entities...)
 		}
-		return resp.Metadata, nil
+		return resp.Metadata, len(resp.Entities), nil
 	})
 	if err != nil {
 		return nil, err
