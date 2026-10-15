@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- JSON decode errors retain their cause for errors.Is/errors.As in both request paths.
 - HTTP non-2xx responses always return an error; filtered responses close the original body exactly once and malformed JSON returns an error without panic.
 - Каждый HTTP client получает отдельный clone transport и TLS configuration; создание клиентов больше не изменяет общий `http.DefaultTransport`, его proxy и TLS verification. Неподдерживаемый или nil default transport возвращает ошибку вместо panic.
 
