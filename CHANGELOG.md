@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The fork requires Go 1.27.0 and pins the Go 1.27.2 development toolchain.
 
 ### Added
+
+- The modernization plan distinguishes fixed syntax-invalid JSON from still-open schema-invalid response guards and session/upload/task lifecycle work.
+
+- Fork contribution governance checks new commit and PR titles plus Keep a Changelog structure in Podman; inherited SDK release headings are explicitly baselined.
+- The modernization plan orders correctness, recovery, package structure, measured optimization and Rancher adoption through Beads dependencies.
 - Blocking complete-SDK vulnerability and module consistency checks; external Keploy fixtures remain explicitly separated from unit coverage.
 - Изолированные Podman regression, unit и race checks для fork; существующие тесты с внешним Keploy server перечислены отдельно от unit gate.
 
