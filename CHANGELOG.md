@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- V4 Operation.Wait interrupts poll timers on local cancellation, terminates FAILED tasks without messages and CANCELED tasks, and keeps CANCELING pending. Missing error messages no longer panic.
+- Concurrent v4 Wait callers share one poller and entity fetch; completed outcomes are stable without extra requests. Result/error slices and affected references are isolated from caller mutation, including successful operations with no returned entities. Local cancellation never cancels or deletes remote tasks or VMs.
+
 - V3 and v4 client caches coalesce concurrent creation per key, share constructor errors, retain the previous client when replacement fails, and prevent an in-flight constructor from republishing after Delete. Functional options use the first successful publication until endpoint change or Delete.
 - V3 cache retirement and failed shared constructor authentication close only SDK-owned idle transports; caller-supplied transports remain caller-owned. Trust bundle options no longer modify the caller's slice backing array.
 - V4 client option errors preserve their cause through errors.Is/errors.As.
