@@ -500,7 +500,7 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}, retry
 			err = json.NewDecoder(resp.Body).Decode(v)
 		}
 		if err != nil {
-			return fmt.Errorf("error unmarshalling json: %s", err)
+			return fmt.Errorf("error unmarshalling json: %w", err)
 		}
 	}
 
@@ -574,7 +574,7 @@ func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interfa
 		} else {
 			err = json.NewDecoder(resp.Body).Decode(v)
 			if err != nil {
-				return fmt.Errorf("error unmarshalling json: %s", err)
+				return fmt.Errorf("error unmarshalling json: %w", err)
 			}
 		}
 	}

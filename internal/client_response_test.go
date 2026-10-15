@@ -130,3 +130,27 @@ func TestDoWithFiltersReturnsCloseError(t *testing.T) {
 		t.Errorf("close error was lost: %v", err)
 	}
 }
+
+func TestDecodeErrorCauseRetained(t *testing.T) {
+	t.Parallel()
+	for _, filtered := range []bool{false, true} {
+		t.Run(fmt.Sprint(filtered), func(t *testing.T) {
+			t.Parallel()
+			body := &responseBody{Reader: strings.NewReader("{")}
+			client := responseClient(body, http.StatusOK)
+			request, err := http.NewRequest(http.MethodGet, "http://fixture.invalid", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var result map[string]any
+			if filtered {
+				err = client.DoWithFilters(t.Context(), request, &result, nil, nil)
+			} else {
+				err = client.Do(t.Context(), request, &result)
+			}
+			if !errors.Is(err, io.ErrUnexpectedEOF) {
+				t.Fatalf("decoder error cause lost: %v", err)
+			}
+		})
+	}
+}
