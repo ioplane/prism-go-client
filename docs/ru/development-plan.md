@@ -56,3 +56,14 @@ Keep a Changelog и Conventional Commits проверяются target governanc
 Published history сохраняется; новые releases используют dated SemVer и
 immutable artifacts с SBOM/provenance. Merge, Rancher registration, изменения
 VM и нагрузка имеют отдельные acceptance/authorization gates.
+
+## W0: воспроизводимые измерения
+
+`make -f Makefile.dev benchmark-check` проверяет assertions стенда с race detector;
+`make -f Makefile.dev benchmark` сохраняет пять выборок при GOMAXPROCS=4, 100 ms на
+benchmark. Время не является CI threshold. Все команды исполняются через
+существующий pinned Podman image. Производительность production из этих
+fixtures не выводится. Compiler/module/API inventory собирается средствами
+`go list -export -compiled -deps -test -json`, `go list -m -json all` и
+`go doc -all` отдельно для каждого Go module. Числа и границы измерения
+публикуются в каноническом плане um-docs; полные исходные результаты локальны.

@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Reproducible offline performance baselines with fixture assertions and repeated allocation/latency samples; benchmark smoke checks run under the race detector. No production workload or performance tuning is performed.
+
 - The modernization plan distinguishes fixed syntax-invalid JSON from still-open schema-invalid response guards and session/upload/task lifecycle work.
 
 - Fork contribution governance checks new commit and PR titles plus Keep a Changelog structure in Podman; inherited SDK release headings are explicitly baselined.

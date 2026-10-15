@@ -21,7 +21,7 @@ unit-all:
 vet:
 	$(DEV_RUN) go vet ./...
 fmt-check:
-	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l internal/client.go internal/client_transport_test.go internal/client_response_test.go .ci)"'
+	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l internal/client.go internal/client_transport_test.go internal/client_response_test.go internal/client_benchmark_test.go v3/cache_benchmark_test.go .ci)"'
 build:
 	$(DEV_RUN) go build ./...
 mod-check:
@@ -29,7 +29,14 @@ mod-check:
 	$(DEV_RUN) go mod verify
 vuln:
 	$(DEV_RUN) go tool govulncheck ./...
-check: governance mod-check fmt-check regression unit-all vet build vuln
+check: governance mod-check fmt-check regression unit-all benchmark-check vet build vuln
+
+.PHONY: benchmark-check benchmark
+benchmark-check:
+	$(DEV_RUN) go test -race -run '^$$' -bench '^BenchmarkClient' -benchtime=2x ./internal ./v3
+
+benchmark:
+	$(DEV_RUN) go test -cpu=4 -run '^$$' -bench '^BenchmarkClient' -benchmem -benchtime=100ms -count=5 ./internal ./v3
 
 .PHONY: governance
 governance:
