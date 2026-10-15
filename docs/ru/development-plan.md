@@ -1,11 +1,11 @@
-# Prism SDK: план модернизации v8
+# Prism SDK: план модернизации v15
 
 Дата: 2026-10-15. Источник задач — локальный Beads `um-docs-nrsu` в um-docs.
 [Полный план, инфраструктурные эпики и критерии](https://um-git.infra4.dev/p.lavrukhin/um-docs/-/blob/sprint/nutanix-premerge-2026-10-15/docs/plans/nutanix-rke2-modernization/README.md).
 
 ## Порядок
 
-Baseline и действующие quality gates → исправления SDK/node driver → HTTP/auth/input/deadline → operation identity/reconcile → структура → измеренная оптимизация → Rancher wiring → release → согласованный canary → scale/replace/upgrade.
+Baseline и действующие quality gates → исправления SDK/node driver → HTTP/auth/input/deadline → operation identity/reconcile → inventory correctness → полный SDK lint/format → структура → измеренная оптимизация → Rancher wiring → release → согласованный canary → scale/replace/upgrade.
 
 Критичность и порядок независимы: P1/C1 recovery не выполняется до проверки
 входа/deadline и quality gates. Статусы проверять в Beads; код в PR не означает
@@ -19,7 +19,7 @@ merge или внедрение. Каждая semantic wave начинается
 | `um-docs-nrsu.6.10.5` | Pre-merge аудит Go 1.16–1.27, API/RE и Testcontainers | closed audit | P1/C2 |
 | `um-docs-nrsu.6.10.12` | SDK/driver: baseline пакетов, входных данных и производительности | W0 | P1/C3 |
 | `um-docs-nrsu.6.10.10` | Fork governance: Keep a Changelog и Conventional Commits | W1 | P1/C2 |
-| `um-docs-nrsu.6.10.6` | Go quality: полный lint, formatter, input inventory и fuzz gates | W2 | P1/C2 |
+| `um-docs-nrsu.6.10.6` | Go quality: полный lint, formatter, input inventory и fuzz gates | W4 | P1/C2 |
 | `um-docs-nrsu.6.10.1` | Node driver: форк ioplane и обновление Go/компонентов | W1 | P1/C3 |
 | `um-docs-nrsu.6.10.2` | Node driver: golangci-lint v2 строгий профиль и CI | W1 | P1/C2 |
 | `um-docs-nrsu.6.10.3` | Node driver: optional vNIC queues и контрактные тесты | W1 | P2/C3 |
@@ -33,7 +33,7 @@ merge или внедрение. Каждая semantic wave начинается
 | `um-docs-nrsu.4.8.8` | SDK v4: terminal task states и отменяемый Operation.Wait | W2 | P1/C2 |
 | `um-docs-nrsu.4.8.1` | Сохранение operation identity и безопасное восстановление Create/Delete | W3 | P1/C1 |
 | `um-docs-nrsu.6.10.8` | SDK: структура пакетов, функций и совместимость публичного API | W4 | P2/C3 |
-| `um-docs-nrsu.4.8.5` | Пагинация и HTTP budget inventory/GPU | W5 | P2/C3 |
+| `um-docs-nrsu.4.8.5` | Пагинация и HTTP budget inventory/GPU | W3 | P1/C2 |
 | `um-docs-nrsu.6.10.9` | SDK: измерения производительности и повторяемости операций | W5 | P2/C3 |
 | `um-docs-nrsu.6.10.11` | Release: SBOM, provenance и неизменяемый consumer pin | W7 | P2/C3 |
 
@@ -48,7 +48,7 @@ Auth/body replay, concurrent cache и v4 terminal states проверять ад
 
 Go tools, exact images/dependencies, readonly/tidy/verify, race/shuffle/atomic,
 vet и whole graph govulncheck выполнять в Podman. Full SDK strict lint/fuzz
-остаются отдельной задачей W2 после адресных исправлений; compiler/module inventory W0 включает nested nusights. Testcontainers проверяет HTTP boundary,
+остаются отдельной задачей W4 перед structural refactor; compiler/module inventory W0 включает nested nusights. Testcontainers проверяет HTTP boundary,
 не полную семантику Prism. Performance измерять по одинаковым fixtures и input:
 request/TLS/auth counts, allocations, bytes, memory/FD/goroutines и latency.
 
@@ -242,14 +242,73 @@ owned idle pool после Delete. Context auth проверяется для sh
 caller transport не закрывается. Testing/synctest заменяет ожидания по Sleep;
 новых dependencies/frameworks и performance campaigns нет.
 
-Следующий этап — общий deadline/state machine um-docs-nrsu.4.8.2, затем NIC/IP
-identity и operation reconcile. Старые constructor/cache wrappers сами по себе
+Очередь v15: v4 terminal states `um-docs-nrsu.4.8.8`, затем inventory correctness
+`um-docs-nrsu.4.8.5` (W3/P1/C2), полный SDK quality `um-docs-nrsu.6.10.6`
+(W4/rank0) перед structural refactor. Deadline/NIC identity и C1 operation
+reconcile приняты в каноническом плане; текущие статусы принадлежат Beads. Старые constructor/cache wrappers сами по себе
 не ограничивают время; consumer должен передать context в новые entrypoints.
 Review/delivery blocker HTTP этапа сохраняется; merge/release/live gates не сняты.
-Полный strict SDK quality остаётся отдельной W2/rank90 задачей.
+Полный strict SDK quality остаётся отдельной W4/rank0 задачей.
 
 Источники: Context7 `/golang/go`; [HTTP request context](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/net/http/request.go),
 [slices.Clone](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/slices/slices.go),
 [testing/synctest](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/testing/synctest/synctest.go),
 [Go1.27 release notes](https://go.dev/doc/go1.27). Go1.27.2 tag и release source
 повторно разрешены через GH GraphQL; runtime/tool pins сохранены.
+
+
+## SDK v4 Operation.Wait: контракт v15
+
+`um-docs-nrsu.4.8.8`: публичный `converged.Operation`, signatures, строка
+`TaskStatusCanceling = "CANCELLING"` и mapping generated TASKSTATUS_CANCELING
+сохранены. FAILED и CANCELED завершаются ошибкой, в том числе без сообщений;
+nil Message пропускается. CANCELING, QUEUED, RUNNING, SUSPENDED, UNKNOWN и
+REDACTED продолжают polling. IsDone отражает терминальность remote task;
+IsSuccess и IsFailed сохраняют проверки SUCCEEDED и FAILED соответственно.
+
+Один Operation имеет одного владельца попытки Wait; конкурентные Wait разделяют
+его polling и materialization. Контекст владельца ограничивает общую попытку;
+остальные ожидающие могут отменить только собственное ожидание. Ошибка
+владельца передаётся ожидающим этой попытки. Фоновых goroutines нет. Отмена
+контекста прекращает локальные timer/lookup/getter; remote task cancellation,
+VM deletion и cleanup не выполняются. Синхронный callback, игнорирующий
+context, не прерывается принудительно. Default deadline не добавлен.
+
+Начальный и последующие интервалы polling — одна секунда через отменяемый timer.
+На интервал приходится максимум один task lookup. После SUCCEEDED getter
+вызывается один раз на уникальный UUID, включая ссылки предыдущих snapshots.
+Успех, remote FAILED/CANCELED и non-context ошибка materialization кэшируются:
+повторный Wait не добавляет task/entity requests и возвращает тот же outcome.
+При materialization error Results остаётся ErrTaskResultsNotReady. Для нового
+чтения после такой ошибки создать новый Operation явно. Отмена/дедлайн или
+ошибка lookup допускают новую явную попытку; после уже наблюдённого SUCCEEDED
+повторяются только getters, частичные результаты прерванной попытки отбрасываются.
+Запрос с уже отменённым context завершается до возврата cached outcome.
+
+Nil entity остаётся best-effort пропуском, включая nil,nil NoEntityGetter для
+delete и исторический nil,non-context-error. Ненулевой entity с ошибкой остаётся
+ошибкой; nil entity с cancellation/deadline больше не скрывает отмену. Пустой
+успешный результат доступен через Results. Срезы Results/Wait/Errors независимы;
+AffectedEntityRefs копирует pointer fields и JSON extension metadata. Указатели
+на T после публикации разделяются читателями: caller не изменяет сам entity
+одновременно с чтением. Constructor-copies разделяют pointer состояния; zero
+value getters безопасны, Wait zero value возвращает initialization error.
+
+Источник terminal semantics: Nutanix MCP, Nutanix Cloud Manager Guide 2.0,
+Tasks View, p.365, chunk299193: Canceling означает начатую, незавершённую отмену;
+Canceled — завершённую. Сгенерированные TaskStatus/EntityReference прочитаны в
+зафиксированном prism-go-client/v4 module. Источник timer/race tests:
+Context7 `/golang/go`, [testing/synctest](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/testing/synctest/synctest.go).
+Тесты используют fake task function и fake clock внутри synctest; реальных
+network requests и wall-clock sleeps нет. Public API source compatibility не
+является утверждением о Go binary ABI. Dependencies/toolchain не меняются.
+
+
+Локальная проверка окончательного source: 9 critical groups и 18 subcases
+успешны с race/shuffle; полный `Makefile.dev check` успешен, включая 13 unit
+packages, nested nusights, tidy/verify, vet/build и оба vulnerability gates
+(0 findings). Existing SDK profile из 6 linters: golangci-lint 2.14.0, 0 issues.
+Rendered declarations converged/v4 совпадают с прежним API snapshot; 15 exported
+functions/methods structs.go совпадают с parent 70ca9c60ff066dfa3ee00977d0f4c27998874245.
+Benchmark-check выполняет прежние assertions при GOMAXPROCS=2 и не является
+новым performance baseline. Полный strict quality остаётся W4/rank0.
