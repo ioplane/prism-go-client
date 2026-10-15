@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Nusights retry documentation matches the existing 10-second minimum and 300-second maximum waits. Secretdir tests use isolated temporary directories and restore environment variables, allowing read-only source mounts.
+
 - V4 error classification tolerates absent Status or Body fields promoted through nil embedded pointers while preserving the original error cause and classification from available fields.
 
 - Invalid v4 ETag and list metadata shapes, including nil embedded pointers to promoted fields, return their documented empty values without reflection panics; ETag copies populate the destination without mutating shared source metadata.

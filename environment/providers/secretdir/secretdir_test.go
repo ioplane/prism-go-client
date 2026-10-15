@@ -30,15 +30,9 @@ func writeParam(t *testing.T, path, key, val string) error {
 
 func TestBasicAuth(t *testing.T) {
 	g := NewWithT(t)
-	path, err := os.MkdirTemp(".", "basic-auth")
-	g.Expect(err).To(Succeed())
-	defer func() {
-		if !t.Failed() {
-			_ = os.RemoveAll(path)
-		}
-	}()
+	path := t.TempDir()
 	t.Logf("Temporary directory %s", path)
-	_ = os.Setenv(envSecretDir, path)
+	t.Setenv(envSecretDir, path)
 	ip := rand.String(10)
 	user := rand.String(10)
 	passwd := rand.String(10)
@@ -57,17 +51,11 @@ func TestBasicAuth(t *testing.T) {
 
 func TestTLSAuth(t *testing.T) {
 	g := NewWithT(t)
-	path, err := os.MkdirTemp(".", "tls-auth")
-	g.Expect(err).To(Succeed())
-	defer func() {
-		if !t.Failed() {
-			_ = os.RemoveAll(path)
-		}
-	}()
+	path := t.TempDir()
 	ip := rand.String(10)
 	cert := rand.String(512)
 	t.Logf("Temporary directory %s", path)
-	_ = os.Setenv(envSecretDir, path)
+	t.Setenv(envSecretDir, path)
 	g.Expect(writeParam(t, path, secretKeyCertName, cert)).To(Succeed())
 	g.Expect(writeParam(t, path, secretKeyEndpoint,
 		fmt.Sprintf("%s:9440", ip))).To(Succeed())
@@ -83,13 +71,7 @@ func TestTLSAuth(t *testing.T) {
 
 func TestNutanixAuth(t *testing.T) {
 	g := NewWithT(t)
-	path, err := os.MkdirTemp(".", "nutanix-auth")
-	g.Expect(err).To(Succeed())
-	defer func() {
-		if !t.Failed() {
-			_ = os.RemoveAll(path)
-		}
-	}()
+	path := t.TempDir()
 	ip := rand.String(10)
 	user := rand.String(10)
 	passwd := rand.String(10)
@@ -109,7 +91,7 @@ func TestNutanixAuth(t *testing.T) {
 	`, user, passwd)
 	endpoint := fmt.Sprintf("%s:9440", ip)
 	t.Logf("Temporary directory %s", path)
-	_ = os.Setenv(envSecretDir, path)
+	t.Setenv(envSecretDir, path)
 
 	// Write three keys
 	g.Expect(writeParam(t, path, secretKeyCredentials, creds)).To(Succeed())
@@ -133,13 +115,7 @@ func TestNutanixAuth(t *testing.T) {
 
 func TestNutanixAPIKeyAuth(t *testing.T) {
 	g := NewWithT(t)
-	path, err := os.MkdirTemp(".", "nutanix-api-key-auth")
-	g.Expect(err).To(Succeed())
-	defer func() {
-		if !t.Failed() {
-			_ = os.RemoveAll(path)
-		}
-	}()
+	path := t.TempDir()
 	ip := rand.String(10)
 	apiKey := rand.String(32)
 	creds := fmt.Sprintf(`
@@ -156,7 +132,7 @@ func TestNutanixAPIKeyAuth(t *testing.T) {
 	`, apiKey)
 	endpoint := fmt.Sprintf("%s:9440", ip)
 	t.Logf("Temporary directory %s", path)
-	_ = os.Setenv(envSecretDir, path)
+	t.Setenv(envSecretDir, path)
 
 	// Write three keys
 	g.Expect(writeParam(t, path, secretKeyCredentials, creds)).To(Succeed())
