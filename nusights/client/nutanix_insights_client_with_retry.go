@@ -29,12 +29,12 @@ type RetryConfig struct {
 	CheckRetry retryablehttp.CheckRetry
 
 	// Backoff specifies the policy for how long to wait between retries.
-	// If nil, exponential backoff with jitter is used.
+	// If nil, exponential backoff is used.
 	Backoff retryablehttp.Backoff
 }
 
 // DefaultRetryConfig returns a RetryConfig with sensible defaults:
-// 4 retries, 10s min wait, 300s max wait, exponential backoff with jitter.
+// 4 retries, 10s min wait, 300s max wait, exponential backoff.
 func DefaultRetryConfig() *RetryConfig {
 	return &RetryConfig{
 		RetryMax:     defaultRetryMax,
