@@ -184,9 +184,14 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	}
 	c.certpool = certPool
 
-	c.httpClient.Transport = http.DefaultTransport
-	c.httpClient.Transport.(*http.Transport).TLSClientConfig = &tls.Config{}
-	c.httpClient.Transport.(*http.Transport).TLSClientConfig.RootCAs = c.certpool
+	defaultTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok || defaultTransport == nil {
+		return nil, fmt.Errorf("default transport is not a non-nil *http.Transport: %T", http.DefaultTransport)
+	}
+	// Credentials and certificate options must never mutate the shared default.
+	transport := defaultTransport.Clone()
+	transport.TLSClientConfig = &tls.Config{RootCAs: c.certpool}
+	c.httpClient.Transport = transport
 
 	// If the user does not specify a logger, then we'll use zap for a default one
 	// If the user specified a logger, then we'll use that logger

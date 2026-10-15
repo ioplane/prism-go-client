@@ -1,0 +1,19 @@
+name: ioplane-prism-go-client
+services:
+  dev:
+    image: localhost/ioplane-prism-go-client:dev
+    build:
+      context: .
+      dockerfile: Containerfile.dev
+    working_dir: /src
+    volumes:
+      - .:/src:z
+      - modules:/cache/modules
+      - build:/cache/build
+    profiles: [dev]
+    command: [bash]
+volumes:
+  modules:
+    name: ioplane-nutanix-driver-go-modules
+  build:
+    name: ioplane-nutanix-driver-go-build

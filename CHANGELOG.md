@@ -1,8 +1,16 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Fixed
+- Каждый HTTP client получает отдельный clone transport и TLS configuration; создание клиентов больше не изменяет общий `http.DefaultTransport`, его proxy и TLS verification. Неподдерживаемый или nil default transport возвращает ошибку вместо panic.
+
+### Added
+- Изолированные Podman regression, unit и race checks для fork; существующие тесты с внешним Keploy server перечислены отдельно от unit gate.
 
 ## [v0.6.1]
 ### Added
