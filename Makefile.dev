@@ -8,7 +8,7 @@ DEV_RUN = $(PODMAN) run --rm -v $(CURDIR):/src:z -w /src \
 KEPLOY_V3 = TestOperations_(CreateRecoveryPlan|GetRecoveryPlan|ListRecoveryPlans|UpdateRecoveryPlans|DeleteRecoveryPlan|GetPrismCentral|ListSubnet|GetSubnet|GetCluster|ListCluster|CreateIdempotenceIdentifers|GetIdempotenceIdentifers|DeleteIdempotenceIdentifers|CreateVM|GetVM|ListVM|UpdateVM)
 KEPLOY_KONNECTOR = TestKonnector(CreateClusterRegistration|UpdateClusterRegistration|CreateClusterRegistrationWithNoCategory|CreateClusterRegistrationWithNoUUID|CreateClusterRegistrationWithNoK8sDistribution|CreateClusterRegistrationAndSetInfo|CreateClusterRegistrationAndAddonSetInfo|GetK8sRegistrationList|CreateClusterRegistrationAndSetMetrics)|TestMetaOperations_(GetVersion|GetSemanticVersion)
 
-.PHONY: dev-build regression unit unit-all vet fmt-check build
+.PHONY: dev-build regression unit unit-all vet fmt-check build mod-check vuln check
 dev-build:
 	$(PODMAN) build -t $(DEV_IMAGE) -f Containerfile.dev .
 regression:
@@ -18,8 +18,14 @@ unit:
 unit-all:
 	$(DEV_RUN) go test -p 2 -race -shuffle=on -covermode=atomic -skip '^($(KEPLOY_V3)|$(KEPLOY_KONNECTOR))$$' ./...
 vet:
-	$(DEV_RUN) go vet ./internal ./v3
+	$(DEV_RUN) go vet ./...
 fmt-check:
 	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l internal/client.go internal/client_transport_test.go internal/client_response_test.go)"'
 build:
-	$(DEV_RUN) go build ./internal ./v3
+	$(DEV_RUN) go build ./...
+mod-check:
+	$(DEV_RUN) go mod tidy -diff
+	$(DEV_RUN) go mod verify
+vuln:
+	$(DEV_RUN) go tool govulncheck ./...
+check: mod-check fmt-check regression unit-all vet build vuln
