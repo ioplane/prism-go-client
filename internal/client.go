@@ -283,7 +283,7 @@ func (c *Client) refreshCookies(ctx context.Context) error {
 		return err
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer func(body io.ReadCloser) { _ = body.Close() }(resp.Body)
 
 	if err := CheckResponse(resp); err != nil {
 		return err
@@ -472,7 +472,7 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}, retry
 		return err
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer func(body io.ReadCloser) { _ = body.Close() }(resp.Body)
 
 	if err := CheckResponse(resp); err != nil {
 		if resp.StatusCode == http.StatusUnauthorized && retryCount < maxRetries {
@@ -537,7 +537,7 @@ func searchSlice(slice []string, key string) bool {
 }
 
 // DoWithFilters performs request passed and filters entities in json response
-func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interface{}, filters []*prismgoclient.AdditionalFilter, baseSearchPaths []string) error {
+func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interface{}, filters []*prismgoclient.AdditionalFilter, baseSearchPaths []string) (err error) {
 	// check if httpClient exists or not
 	if c.httpClient == nil {
 		return fmt.Errorf("%s", c.ErrorMsg)
@@ -548,11 +548,12 @@ func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interfa
 		return err
 	}
 
-	defer func() {
-		if rerr := resp.Body.Close(); err == nil {
+	// Filtering and CheckResponse may replace resp.Body; retain its original owner.
+	defer func(body io.ReadCloser) {
+		if rerr := body.Close(); err == nil {
 			err = rerr
 		}
-	}()
+	}(resp.Body)
 
 	if err := CheckResponse(resp); err != nil {
 		return err
@@ -586,7 +587,7 @@ func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interfa
 }
 
 func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseSearchPaths []string) (io.ReadCloser, error) {
-	if filters == nil {
+	if len(filters) == 0 {
 		return body, nil
 	}
 	if len(baseSearchPaths) == 0 {
@@ -662,6 +663,7 @@ func CheckResponse(r *http.Response) error {
 	if c >= 200 && c <= 299 {
 		return nil
 	}
+	statusError := fmt.Errorf("unexpected HTTP status %d (%s)", c, http.StatusText(c))
 
 	// Nutanix returns non-json response with code 401 when
 	// invalid credentials are used
@@ -677,11 +679,11 @@ func CheckResponse(r *http.Response) error {
 	rdr2 := io.NopCloser(bytes.NewBuffer(buf))
 
 	r.Body = rdr2
-	// if has entities -> return nil
+	// An entities payload does not override a failing HTTP status.
 	// if has message_list -> check_error["state"]
 	// if has status -> check_error["status.state"]
 	if len(buf) == 0 {
-		return nil
+		return statusError
 	}
 
 	var res map[string]interface{}
@@ -692,16 +694,16 @@ func CheckResponse(r *http.Response) error {
 
 	errRes := &ErrorResponse{}
 	if status, ok := res["status"]; ok {
-		_, sok := status.(string)
-		if sok {
-			return nil
+		statusObject, ok := status.(map[string]interface{})
+		if !ok {
+			return statusError
 		}
 
-		err = fillStruct(status.(map[string]interface{}), errRes)
+		err = fillStruct(statusObject, errRes)
 	} else if _, ok := res["state"]; ok {
 		err = fillStruct(res, errRes)
 	} else if _, ok := res["entities"]; ok {
-		return nil
+		return statusError
 	}
 
 	if err != nil {
@@ -719,7 +721,7 @@ func CheckResponse(r *http.Response) error {
 		return fmt.Errorf("error: %s", message)
 	}
 	if errRes.State != "ERROR" {
-		return nil
+		return statusError
 	}
 
 	pretty, err := json.MarshalIndent(errRes, "", "  ")
