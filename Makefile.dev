@@ -1,0 +1,25 @@
+PODMAN ?= podman
+DEV_IMAGE ?= localhost/ioplane-prism-go-client:dev
+DEV_RUN = $(PODMAN) run --rm -v $(CURDIR):/src:z -w /src \
+	-v ioplane-nutanix-driver-go-modules:/cache/modules \
+	-v ioplane-nutanix-driver-go-build:/cache/build $(DEV_IMAGE)
+
+# These existing integration tests require the external Keploy server on :6789.
+KEPLOY_V3 = TestOperations_(CreateRecoveryPlan|GetRecoveryPlan|ListRecoveryPlans|UpdateRecoveryPlans|DeleteRecoveryPlan|GetPrismCentral|ListSubnet|GetSubnet|GetCluster|ListCluster|CreateIdempotenceIdentifers|GetIdempotenceIdentifers|DeleteIdempotenceIdentifers|CreateVM|GetVM|ListVM|UpdateVM)
+KEPLOY_KONNECTOR = TestKonnector(CreateClusterRegistration|UpdateClusterRegistration|CreateClusterRegistrationWithNoCategory|CreateClusterRegistrationWithNoUUID|CreateClusterRegistrationWithNoK8sDistribution|CreateClusterRegistrationAndSetInfo|CreateClusterRegistrationAndAddonSetInfo|GetK8sRegistrationList|CreateClusterRegistrationAndSetMetrics)|TestMetaOperations_(GetVersion|GetSemanticVersion)
+
+.PHONY: dev-build regression unit unit-all vet fmt-check build
+dev-build:
+	$(PODMAN) build -t $(DEV_IMAGE) -f Containerfile.dev .
+regression:
+	$(DEV_RUN) go test -race -count=5 -run 'TestNewClient(TransportIsolation|UnsupportedDefaultTransport)$$' ./internal
+unit:
+	$(DEV_RUN) go test -race -shuffle=on -covermode=atomic -skip '^($(KEPLOY_V3))$$' ./internal ./v3
+unit-all:
+	$(DEV_RUN) go test -p 2 -race -shuffle=on -covermode=atomic -skip '^($(KEPLOY_V3)|$(KEPLOY_KONNECTOR))$$' ./...
+vet:
+	$(DEV_RUN) go vet ./internal ./v3
+fmt-check:
+	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l internal/client.go internal/client_transport_test.go)"'
+build:
+	$(DEV_RUN) go build ./internal ./v3
