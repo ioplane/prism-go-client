@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- API base-URL configuration logs omit the raw URL and base-URL parse-error text is now constant. Consumers must use errors.As with *url.Error instead of diagnostic string matching; the unwrapped URL/cause may contain credentials or tokens and must not be logged. Valid URL parsing and the original parse cause are preserved.
+
 - Proxy configuration logs omit the raw URL and proxy parse-error text is now constant. Consumers matching diagnostic strings must use errors.As with *url.Error instead; the unwrapped cause may contain credentials and must not be logged.
 
 - API response, decode, copy and close errors use safe diagnostics while retaining causes for programmatic inspection. Non-2xx body parsing and implicit server-message logging are removed.

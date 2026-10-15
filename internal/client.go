@@ -81,12 +81,15 @@ type cookieRefresh struct {
 
 type ClientOption func(*Client) error
 
-type proxyParseError struct{ cause error }
+type urlParseError struct {
+	message string
+	cause   error
+}
 
-// The original parse error may contain proxy credentials; only Unwrap exposes it.
-func (*proxyParseError) Error() string { return "error parsing proxy URL" }
+// The original parse error may contain credentials; only Unwrap exposes it.
+func (err *urlParseError) Error() string { return err.message }
 
-func (err *proxyParseError) Unwrap() error { return err.cause }
+func (err *urlParseError) Unwrap() error { return err.cause }
 
 // WithLogger sets the logger for the httpClient
 func WithLogger(logger *logr.Logger) ClientOption {
@@ -117,7 +120,7 @@ func WithCredentials(credentials *prismgoclient.Credentials) ClientOption {
 			c.logger.V(1).Info("Using configured proxy")
 			proxy, err := url.Parse(c.credentials.ProxyURL)
 			if err != nil {
-				return &proxyParseError{cause: err}
+				return &urlParseError{message: "error parsing proxy URL", cause: err}
 			}
 			transport, ok := c.httpClient.Transport.(*http.Transport)
 			if !ok {
@@ -149,7 +152,7 @@ func WithBaseURL(baseURL string) ClientOption {
 		}
 		u, err := url.Parse(baseURL)
 		if err != nil {
-			return err
+			return &urlParseError{message: "error parsing base URL", cause: err}
 		}
 		if u.Path == "" {
 			u.Path = "/"
@@ -281,7 +284,7 @@ func (c *Client) validateOptions() error {
 		return fmt.Errorf("credentials argument must be passed")
 	}
 	if c.BaseURL == nil {
-		c.logger.V(1).Info("BaseURL is not set. Using URL from credentials", "url", c.credentials.URL)
+		c.logger.V(1).Info("BaseURL is not set. Using URL from credentials")
 		if err := WithBaseURL(c.credentials.URL)(c); err != nil {
 			return err
 		}

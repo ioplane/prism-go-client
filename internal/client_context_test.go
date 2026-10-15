@@ -97,26 +97,35 @@ func TestConstructorNilInputs(t *testing.T) {
 	}
 }
 
-func TestConstructorProxyDiagnostics(t *testing.T) {
-	const marker = "synthetic-proxy-secret-marker"
-	for _, proxy := range []string{
-		"http://fixture:" + marker + "@proxy.invalid:3128",
-		"http://fixture:" + marker + "@%41.invalid",
+func TestConstructorURLDiagnostics(t *testing.T) {
+	const marker = "synthetic-url-secret-marker"
+	for _, test := range []struct {
+		name    string
+		proxy   string
+		baseURL string
+		invalid bool
+	}{
+		{name: "valid proxy", proxy: "http://fixture:" + marker + "@proxy.invalid:3128", baseURL: "https://fixture.invalid"},
+		{name: "malformed proxy", proxy: "http://fixture:" + marker + "@%41.invalid", baseURL: "https://fixture.invalid", invalid: true},
+		{name: "valid API URL", baseURL: "https://fixture:" + marker + "@fixture.invalid/path?token=" + marker},
+		{name: "malformed API URL", baseURL: "https://fixture:" + marker + "@%41.invalid/path?token=" + marker, invalid: true},
 	} {
-		t.Run(proxy, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			var logs bytes.Buffer
 			logger := logr.FromSlogHandler(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-			credentials := prism.Credentials{URL: "https://fixture.invalid", ProxyURL: proxy}
+			credentials := prism.Credentials{URL: test.baseURL, ProxyURL: test.proxy}
 			client, err := internal.NewClient(internal.WithLogger(&logger), internal.WithCredentials(&credentials),
 				internal.WithUserAgent("fixture"), internal.WithAbsolutePath("fixture"))
-			if strings.Contains(proxy, "%41") {
+			if test.invalid {
 				require.Nil(t, client)
 				require.Error(t, err)
 				require.NotContains(t, err.Error(), marker)
 				var cause *url.Error
 				require.ErrorAs(t, err, &cause)
+				require.Contains(t, cause.URL, marker)
 			} else {
 				require.NoError(t, err)
+				require.Equal(t, strings.TrimSuffix(test.baseURL, "/"), strings.TrimSuffix(client.BaseURL.String(), "/"))
 				client.CloseIdleConnections()
 			}
 			require.NotContains(t, logs.String(), marker)
