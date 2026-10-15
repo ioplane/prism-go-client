@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/PaesslerAG/jsonpath"
 	"github.com/go-logr/logr"
@@ -54,7 +55,10 @@ type Client struct {
 	// User agent for httpClient
 	UserAgent string
 
-	cookies []*http.Cookie
+	cookies        []*http.Cookie
+	sessionMu      sync.Mutex
+	sessionVersion uint64
+	sessionRefresh *cookieRefresh
 
 	// Optional function called after every successful request made.
 	onRequestCompleted RequestCompletionCallback
@@ -67,6 +71,11 @@ type Client struct {
 
 	logger   *logr.Logger
 	certpool *x509.CertPool
+}
+
+type cookieRefresh struct {
+	done chan struct{}
+	err  error
 }
 
 type ClientOption func(*Client) error
@@ -139,7 +148,10 @@ func WithBaseURL(baseURL string) ClientOption {
 // WithCookies sets the cookies for the httpClient
 func WithCookies(cookies []*http.Cookie) ClientOption {
 	return func(c *Client) error {
+		c.sessionMu.Lock()
 		c.cookies = cookies
+		c.sessionVersion++
+		c.sessionMu.Unlock()
 		return nil
 	}
 }
@@ -257,11 +269,13 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 		return nil, err
 	}
 
+	c.sessionMu.Lock()
 	if c.cookies != nil {
 		decorateRequestWithCookies(req, c.cookies)
 	} else {
 		decorateRequestWithAuthHeaders(req, c.credentials)
 	}
+	c.sessionMu.Unlock()
 
 	return req, nil
 }
@@ -290,7 +304,10 @@ func (c *Client) refreshCookies(ctx context.Context) error {
 		return err
 	}
 
+	c.sessionMu.Lock()
 	c.cookies = resp.Cookies()
+	c.sessionVersion++
+	c.sessionMu.Unlock()
 
 	return nil
 }
@@ -440,39 +457,78 @@ func (c *Client) OnRequestCompleted(rc RequestCompletionCallback) {
 	c.onRequestCompleted = rc
 }
 
-func (c *Client) clearCookies() {
-	c.cookies = nil
+// refreshSession shares one refresh result among callers using the expired version.
+func (c *Client) refreshSession(ctx context.Context, version uint64) error {
+	c.sessionMu.Lock()
+	if version != c.sessionVersion {
+		c.sessionMu.Unlock()
+		return nil
+	}
+	if refresh := c.sessionRefresh; refresh != nil {
+		c.sessionMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-refresh.done:
+			return refresh.err
+		}
+	}
+	refresh := &cookieRefresh{done: make(chan struct{})}
+	c.sessionRefresh = refresh
+	c.sessionMu.Unlock()
+
+	err := c.refreshCookies(ctx)
+	c.sessionMu.Lock()
+	refresh.err = err
+	c.sessionRefresh = nil
+	close(refresh.done)
+	c.sessionMu.Unlock()
+	return err
 }
 
-// do will perform the request and handle retries. This is a recursive function
-// that will retry the request if the response is a 401 and the client is configured
-// to use session authentication. It will retry up to maxRetries times.
-// do performs the request and handles retries. It is not exported.
-func (c *Client) do(ctx context.Context, req *http.Request, v interface{}, retryCount int, maxRetries int) error {
-	req = req.WithContext(ctx)
+// send permits one explicit 401 replay; transport errors never trigger a replay.
+func (c *Client) send(req *http.Request) (*http.Response, error) {
+	var version uint64
+	if c.credentials.SessionAuth {
+		c.sessionMu.Lock()
+		version = c.sessionVersion
+		clearCookiesInRequest(req)
+		decorateRequestWithCookies(req, c.cookies)
+		c.sessionMu.Unlock()
+	}
 	resp, err := c.httpClient.Do(req)
+	if err != nil || !c.credentials.SessionAuth || resp.StatusCode != http.StatusUnauthorized ||
+		(req.Body != nil && req.Body != http.NoBody && req.GetBody == nil) {
+		return resp, err
+	}
+	originalBody := resp.Body
+	_ = CheckResponse(resp)
+	_ = originalBody.Close()
+	if err := c.refreshSession(req.Context(), version); err != nil {
+		return nil, err
+	}
+	if req.Body != nil && req.Body != http.NoBody {
+		req.Body, err = req.GetBody()
+		if err != nil {
+			return nil, err
+		}
+	}
+	c.sessionMu.Lock()
+	clearCookiesInRequest(req)
+	decorateRequestWithCookies(req, c.cookies)
+	c.sessionMu.Unlock()
+	return c.httpClient.Do(req)
+}
+
+// Do performs the request with at most one session-auth replay.
+func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) error {
+	req = req.Clone(ctx)
+	resp, err := c.send(req)
 	if err != nil {
 		return err
 	}
-
 	defer func(body io.ReadCloser) { _ = body.Close() }(resp.Body)
-
 	if err := CheckResponse(resp); err != nil {
-		if resp.StatusCode == http.StatusUnauthorized && retryCount < maxRetries {
-			c.clearCookies()
-			if err := c.refreshCookies(ctx); err != nil {
-				return err
-			}
-			if req.Body != nil && req.GetBody != nil {
-				req.Body, err = req.GetBody()
-				if err != nil {
-					return err
-				}
-			}
-			clearCookiesInRequest(req)
-			decorateRequestWithCookies(req, c.cookies)
-			return c.do(ctx, req, v, retryCount+1, maxRetries)
-		}
 		return err
 	}
 
@@ -493,23 +549,6 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}, retry
 	return nil
 }
 
-// Do performs request passed
-func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) error {
-	noRetries := 0
-	retryOnce := 1
-
-	// It's recommend that the clients use session-auth cookies instead of basic auth for requests to Prism Central
-	// where possible. Session tokens are alive for 15m and then replaced. The session-auth handling mechanism in
-	// the client should be resilient to session token refresh. As long the credentials are accurate and session
-	// auth mechanism is in play, the client upon receiving the first 401 should refresh the session cookie and
-	// retry the request. Only if the requests fails the second time, should the client return a 401 back to the caller.
-	if c.credentials.SessionAuth {
-		return c.do(ctx, req, v, noRetries, retryOnce)
-	}
-
-	return c.do(ctx, req, v, noRetries, noRetries)
-}
-
 func searchSlice(slice []string, key string) bool {
 	for _, v := range slice {
 		if v == key {
@@ -525,8 +564,8 @@ func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interfa
 	if c.httpClient == nil {
 		return fmt.Errorf("%s", c.ErrorMsg)
 	}
-	req = req.WithContext(ctx)
-	resp, err := c.httpClient.Do(req)
+	req = req.Clone(ctx)
+	resp, err := c.send(req)
 	if err != nil {
 		return err
 	}
