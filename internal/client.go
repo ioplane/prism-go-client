@@ -379,45 +379,19 @@ func (c *Client) NewUnAuthFormEncodedRequest(method, urlStr string, body map[str
 	return req, nil
 }
 
-// NewUploadRequest Handles image uploads for image service
+// NewUploadRequest authenticates an upload built by NewUnAuthUploadRequest.
 func (c *Client) NewUploadRequest(method, urlStr string, fileReader *os.File) (*http.Request, error) {
-	// check if httpClient exists or not
-	if c.httpClient == nil {
-		return nil, fmt.Errorf("%s", c.ErrorMsg)
-	}
-	rel, errp := url.Parse(c.absolutePath + urlStr)
-	if errp != nil {
-		return nil, errp
-	}
-
-	u := c.BaseURL.ResolveReference(rel)
-
-	req, err := http.NewRequest(method, u.String(), fileReader)
+	req, err := c.NewUnAuthUploadRequest(method, urlStr, fileReader)
 	if err != nil {
 		return nil, err
 	}
-
-	// Set req.ContentLength and req.GetBody as internally there is no implementation of such for os.File type reader
-	// http.NewRequest() only sets this values for types - bytes.Buffer, bytes.Reader and strings.Reader
-	// Refer https://github.com/golang/go/blob/a0f77e56b7a7ecb92dca3e2afdd56ee773c2cb07/src/net/http/request.go#L896
-	fileInfo, err := fileReader.Stat()
-	if err != nil {
-		return nil, err
-	}
-	req.ContentLength = fileInfo.Size()
-	req.GetBody = func() (io.ReadCloser, error) {
-		return io.NopCloser(fileReader), nil
-	}
-
-	req.Header.Add("Content-Type", octetStreamType)
-	req.Header.Add("Accept", mediaType)
-	req.Header.Add("User-Agent", c.UserAgent)
 	decorateRequestWithAuthHeaders(req, c.credentials)
 
 	return req, nil
 }
 
-// NewUploadRequest handles image uploads for image service
+// NewUnAuthUploadRequest reads a regular file from its current offset without owning it.
+// The caller must keep the file open and unchanged until the request and all replays finish.
 func (c *Client) NewUnAuthUploadRequest(method, urlStr string, fileReader *os.File) (*http.Request, error) {
 	// check if httpClient exists or not
 	if c.httpClient == nil {
@@ -430,22 +404,30 @@ func (c *Client) NewUnAuthUploadRequest(method, urlStr string, fileReader *os.Fi
 
 	u := c.BaseURL.ResolveReference(rel)
 
-	req, err := http.NewRequest(method, u.String(), fileReader)
-	if err != nil {
-		return nil, err
-	}
-
-	// Set req.ContentLength and req.GetBody as internally there is no implementation of such for os.File type reader
-	// http.NewRequest() only sets this values for types - bytes.Buffer, bytes.Reader and strings.Reader
-	// Refer https://github.com/golang/go/blob/a0f77e56b7a7ecb92dca3e2afdd56ee773c2cb07/src/net/http/request.go#L896
 	fileInfo, err := fileReader.Stat()
 	if err != nil {
 		return nil, err
 	}
-	req.ContentLength = fileInfo.Size()
-	req.GetBody = func() (io.ReadCloser, error) {
-		return io.NopCloser(fileReader), nil
+	if !fileInfo.Mode().IsRegular() {
+		return nil, fmt.Errorf("upload requires a regular file")
 	}
+	offset, err := fileReader.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return nil, err
+	}
+	size := max(int64(0), fileInfo.Size()-offset)
+	newBody := func() io.ReadCloser {
+		if size == 0 {
+			return http.NoBody
+		}
+		return io.NopCloser(io.NewSectionReader(fileReader, offset, size))
+	}
+	req, err := http.NewRequest(method, u.String(), newBody())
+	if err != nil {
+		return nil, err
+	}
+	req.ContentLength = size
+	req.GetBody = func() (io.ReadCloser, error) { return newBody(), nil }
 
 	req.Header.Add("Content-Type", octetStreamType)
 	req.Header.Add("Accept", mediaType)

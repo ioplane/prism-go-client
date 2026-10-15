@@ -1,4 +1,4 @@
-# Prism SDK: план модернизации v3
+# Prism SDK: план модернизации v6
 
 Дата: 2026-10-15. Источник задач — локальный Beads `um-docs-nrsu` в um-docs.
 [Полный план, инфраструктурные эпики и критерии](https://um-git.infra4.dev/p.lavrukhin/um-docs/-/blob/sprint/nutanix-premerge-2026-10-15/docs/plans/nutanix-rke2-modernization/README.md).
@@ -85,8 +85,9 @@ checks. Новые тесты добавлять только для крити�
 Текущий batch: timeout считывается из запроса до minimum clamp; SDK filter
 отклоняет nil filter, отсутствующий/null/non-array entities и non-object element
 с ошибкой вместо panic. Корректные filter payload и optional queue/RPC JSON
-контракты сохраняются. Остальная валидация YAML/hardware, bounded response
-bodies и безопасная диагностика остаются открыты в Beads; этот batch их не закрывает.
+контракты сохраняются. Response boundary продолжен этапом v4 ниже; driver
+YAML/hardware validation реализован в каноническом плане v5. Review/delivery
+остаются отдельными gates. Этап v6 начинает upload часть um-docs-nrsu.4.8.7.
 
 Go release notes проверены через GitHub API
 [`golang/website` — Go 1.27](https://go.dev/doc/go1.27), source blob
@@ -133,3 +134,42 @@ Public API сравнен по тем же 15 public packages W0: 14 без из
 W0 text hash не является текущим hash; Go binary ABI из этого сравнения не выводится.
 Тексты diagnostics и ограничения body требуют consumer migration; SDK commit
 помечается breaking. Internal/v4/converged error categories не переименовываются.
+
+
+## Upload replay и владение файлом: этап v6
+
+`um-docs-nrsu.4.8.7`, P1/C2, in_progress: upload substep. Session-cookie locking,
+single refresh при конкурентном expiration, constructor cancellation,
+DoWithFilters refresh и cache identity/concurrency ещё не реализованы.
+Зависимость от HTTP acceptance сохраняется; развитие идёт поверх проверенного
+response boundary в существующем SDK PR #1. Merge/release требуют review.
+
+NewUploadRequest использует общий builder NewUnAuthUploadRequest и сохраняет
+прежнюю auth/header схему. Источник — открытый regular file; начало диапазона
+берётся из текущего offset, Content-Length равен оставшейся длине. EOF и offset
+за EOF дают пустой http.NoBody; pipe/device/directory отклоняются. Body и каждый
+GetBody получают отдельный SectionReader; их чтение и Close не перемещают и не
+закрывают исходный descriptor. Владение остаётся у вызывающего кода: файл должен
+оставаться открытым и неизменным до завершения запроса и всех его повторов.
+Существующий v3 Operations.UploadImage уже закрывает свой файл через defer.
+
+Содержимое образа не копируется в память и не фиксируется отдельным snapshot;
+изменение файла во время запроса нарушает контракт вызывающего кода. Новых
+retry правил для mutations/unknown outcome нет. Не изменены SessionAuth,
+redirect policy, public signatures, пакеты, wire headers, tools и dependencies.
+Это исправление replay bytes/ownership; общая идемпотентность UploadImage,
+серверная приёмка Prism и production throughput здесь не квалифицируются.
+
+Критичные regressions используют прежний HTTP fixture: оба builders, offset0,
+ненулевой offset, EOF/за EOF, чтение после Body.Close, два независимых replay,
+HTTP307 с идентичными bytes и отклонение pipe. Новый файл включён в прежний
+fmt gate; новые frameworks, scripts и benchmark campaigns не добавлены.
+
+Источники: Context7 `/golang/go` и точный source toolchain:
+[Request.Body/GetBody](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/net/http/request.go#L175),
+[io.NewSectionReader](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/io/io.go#L485).
+Tag go1.27.2 подтверждён через GH API. Go1.27 release notes прочитаны повторно,
+golang/website blob `2d38a2be7836deca1d17451c6e03dd444f282847`: автоматический
+response-body drain не восстанавливает request file offset и не меняет
+контракт GetBody. Public API/machine RPC совместимость проверяется отдельно
+от утверждений о Go binary ABI.
