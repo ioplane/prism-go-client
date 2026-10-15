@@ -11,6 +11,9 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	prism "github.com/nutanix-cloud-native/prism-go-client"
 )
 
@@ -181,17 +184,13 @@ func TestSessionRefreshWaitCancellation(t *testing.T) {
 			// Release the handler before server cleanup even if an assertion fails.
 			defer close(releaseRefresh)
 			request, err := client.NewRequest(http.MethodGet, "/projects/list", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			originalCookies := request.Header.Get("Cookie")
 			leader := make(chan error, 1)
 			go func() { leader <- sessionDo(client, context.Background(), request, false) }()
 			<-refreshStarted
 			waiterRequest, err := client.NewRequest(http.MethodGet, "/projects/list", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			waiterRequest.Header.Set("Waiter", "yes")
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -199,20 +198,12 @@ func TestSessionRefreshWaitCancellation(t *testing.T) {
 			go func() { waiter <- sessionDo(client, ctx, waiterRequest, filtered) }()
 			<-waiterSent
 			cancel()
-			if err := <-waiter; !errors.Is(err, context.Canceled) {
-				t.Fatalf("waiter error=%v", err)
-			}
-			if got := authCalls.Load(); got != 2 {
-				t.Errorf("auth calls=%d, want2", got)
-			}
+			require.ErrorIs(t, <-waiter, context.Canceled)
+			assert.Equal(t, int32(2), authCalls.Load(), "auth calls")
 			// The canceled waiter must return while the leader's refresh is blocked.
 			releaseRefresh <- struct{}{}
-			if err := <-leader; err != nil {
-				t.Fatal(err)
-			}
-			if got := request.Header.Get("Cookie"); got != originalCookies {
-				t.Errorf("caller cookies changed: %q", got)
-			}
+			require.NoError(t, <-leader)
+			assert.Equal(t, originalCookies, request.Header.Get("Cookie"), "caller cookies")
 		})
 	}
 }
@@ -240,46 +231,40 @@ func TestSessionTransportErrorHasNoReplay(t *testing.T) {
 }
 
 func TestSessionReplayFailure(t *testing.T) {
-	for _, filtered := range []bool{false, true} {
-		for _, authFailure := range []bool{false, true} {
-			t.Run(fmt.Sprintf("filtered=%t/authFailure=%t", filtered, authFailure), func(t *testing.T) {
-				var authCalls, resourceCalls atomic.Int32
-				client := sessionClient(t, func(w http.ResponseWriter, r *http.Request) {
-					if strings.HasSuffix(r.URL.Path, "/users/me") {
-						if authCalls.Add(1) > 1 && authFailure {
-							w.WriteHeader(http.StatusServiceUnavailable)
-							return
-						}
-						http.SetCookie(w, &http.Cookie{Name: "session-id", Value: "session"})
+	for _, testCase := range []struct{ filtered, authFailure bool }{
+		{false, false}, {false, true}, {true, false}, {true, true},
+	} {
+		filtered, authFailure := testCase.filtered, testCase.authFailure
+		t.Run(fmt.Sprintf("filtered=%t/authFailure=%t", filtered, authFailure), func(t *testing.T) {
+			var authCalls, resourceCalls atomic.Int32
+			client := sessionClient(t, func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/users/me") {
+					if authCalls.Add(1) > 1 && authFailure {
+						w.WriteHeader(http.StatusServiceUnavailable)
 						return
 					}
-					resourceCalls.Add(1)
-					_, _ = io.Copy(io.Discard, r.Body)
-					w.WriteHeader(http.StatusUnauthorized)
-				})
-				request, err := client.NewRequest(http.MethodPost, "/operation", map[string]string{"kind": "project"})
-				if err != nil {
-					t.Fatal(err)
+					http.SetCookie(w, &http.Cookie{Name: "session-id", Value: "session"})
+					return
 				}
-				want := errors.New("replay unavailable")
-				request.GetBody = func() (io.ReadCloser, error) { return nil, want }
-				err = sessionDo(client, context.Background(), request, filtered)
-				if authFailure {
-					var responseError *prism.ResponseError
-					if !errors.As(err, &responseError) || responseError.StatusCode != http.StatusServiceUnavailable {
-						t.Fatalf("error=%v,want503", err)
-					}
-				} else if !errors.Is(err, want) {
-					t.Fatalf("error=%v,want replay cause", err)
-				}
-				if got := resourceCalls.Load(); got != 1 {
-					t.Errorf("resource calls=%d,want1", got)
-				}
-				if got := authCalls.Load(); got != 2 {
-					t.Errorf("auth calls=%d,want2", got)
-				}
+				resourceCalls.Add(1)
+				_, _ = io.Copy(io.Discard, r.Body)
+				w.WriteHeader(http.StatusUnauthorized)
 			})
-		}
+			request, err := client.NewRequest(http.MethodPost, "/operation", map[string]string{"kind": "project"})
+			require.NoError(t, err)
+			want := errors.New("replay unavailable")
+			request.GetBody = func() (io.ReadCloser, error) { return nil, want }
+			err = sessionDo(client, context.Background(), request, filtered)
+			if authFailure {
+				var responseError *prism.ResponseError
+				require.ErrorAs(t, err, &responseError)
+				assert.Equal(t, http.StatusServiceUnavailable, responseError.StatusCode)
+			} else {
+				require.ErrorIs(t, err, want)
+			}
+			assert.Equal(t, int32(1), resourceCalls.Load(), "resource calls")
+			assert.Equal(t, int32(2), authCalls.Load(), "auth calls")
+		})
 	}
 }
 
@@ -312,19 +297,11 @@ func TestSessionResponseOwnership(t *testing.T) {
 				return &http.Response{StatusCode: status, Header: header, Body: bodies[index], Request: request}, nil
 			})
 			request, err := client.NewRequest(http.MethodGet, "/projects/list", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := sessionDo(client, context.Background(), request, filtered); err != nil {
-				t.Fatal(err)
-			}
-			if calls != 3 {
-				t.Errorf("calls=%d,want3", calls)
-			}
+			require.NoError(t, err)
+			require.NoError(t, sessionDo(client, context.Background(), request, filtered))
+			assert.Equal(t, 3, calls, "requests")
 			for index, body := range bodies {
-				if body.closes != 1 {
-					t.Errorf("body%d closes=%d,want1", index, body.closes)
-				}
+				assert.Equal(t, 1, body.closes, "body%d closes", index)
 			}
 		})
 	}
