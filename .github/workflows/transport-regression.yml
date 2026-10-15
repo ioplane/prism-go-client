@@ -1,4 +1,4 @@
-name: Transport regression
+name: SDK quality
 on:
   pull_request:
   push:

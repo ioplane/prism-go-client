@@ -6,6 +6,22 @@ Go client for Nutanix Prism APIs. Currently includes the following APIs:
 - Select Nutanix v4 APIs for Prism Central
 - Konnector
 
+## Fork development
+
+The `ioplane` fork requires Go 1.27.0 and uses the pinned Go 1.27.2 Podman
+image for every check. Earlier Go consumers must update their toolchain before
+using this fork. Public SDK methods and module import paths are retained.
+
+```sh
+make -f Makefile.dev dev-build
+make -f Makefile.dev check
+```
+
+The blocking checks cover module consistency, transport regressions, all offline
+unit packages with race detection, vet/build and whole-SDK govulncheck.
+The 28 existing Keploy fixtures requiring an external server are explicitly
+excluded; offline fixtures do not establish live Prism compatibility.
+
 ## Contributing
 See the [contributing docs](CONTRIBUTING.md).
 
