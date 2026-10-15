@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- File uploads use independent replay readers over the caller-owned regular file, with Content-Length matching the remaining range. Closing an HTTP body no longer closes or advances the source file; non-regular sources are rejected before sending.
+
 - Nil additional filters and malformed entities now return errors instead of panicking; valid filtering and original response-body ownership are preserved.
 - The independent nusights module uses patched MongoDB v1.17.10; its module-level vulnerability scan is blocking, including vulnerabilities outside imported packages.
 - Standalone SDK dependency advisories are resolved by compatible updates to x/net, AWS S3/eventstream, MongoDB v1 and OAuth2; whole-SDK scanning remains blocking.
