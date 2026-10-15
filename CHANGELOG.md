@@ -11,7 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTP non-2xx responses always return an error; filtered responses close the original body exactly once and malformed JSON returns an error without panic.
 - Каждый HTTP client получает отдельный clone transport и TLS configuration; создание клиентов больше не изменяет общий `http.DefaultTransport`, его proxy и TLS verification. Неподдерживаемый или nil default transport возвращает ошибку вместо panic.
 
+### Changed
+- The fork requires Go 1.27.0 and pins the Go 1.27.2 development toolchain.
+
 ### Added
+- Blocking complete-SDK vulnerability and module consistency checks; external Keploy fixtures remain explicitly separated from unit coverage.
 - Изолированные Podman regression, unit и race checks для fork; существующие тесты с внешним Keploy server перечислены отдельно от unit gate.
 
 ## [v0.6.1]
