@@ -1,4 +1,4 @@
-# Prism SDK: план модернизации v7
+# Prism SDK: план модернизации v8
 
 Дата: 2026-10-15. Источник задач — локальный Beads `um-docs-nrsu` в um-docs.
 [Полный план, инфраструктурные эпики и критерии](https://um-git.infra4.dev/p.lavrukhin/um-docs/-/blob/sprint/nutanix-premerge-2026-10-15/docs/plans/nutanix-rke2-modernization/README.md).
@@ -206,3 +206,50 @@ performance campaigns нет. Constructor по-прежнему использу
 Источники: Context7 `/golang/go`; [Request.Clone/GetBody и context](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/net/http/request.go),
 [Go1.27 release notes](https://go.dev/doc/go1.27). Версии runtime/tools сохранены;
 этот этап не утверждает изменение TTL cookies или семантики server-side API.
+
+
+## Context и cache: этап плана v8
+
+`um-docs-nrsu.4.8.7` продолжен после проверенного session этапа v7.
+Добавлены NewV3ClientWithContext, NewKonnectorAPIClientWithContext и общий
+internal.NewClientWithContext. Контекст используется для первоначального auth,
+не сохраняется как context будущих запросов. Старые entrypoints остаются с
+Background; новый default timeout не устанавливается. Синхронные пользовательские
+functional options не прерываются принудительно.
+
+V3/v4 GetOrCreateWithContext создаёт один client на ключ для текущей генерации,
+не удерживает общий mutex во время constructor/I/O; независимые ключи выполняются
+параллельно. Ожидающий может отменить свой context. Ошибка владельца возвращается
+ожидающим того же endpoint hash; новый явный вызов после ошибки может повторить
+создание. Hash включает management endpoint: адрес, credentials, TLS/trust fields.
+Functional options не входят в identity: первые успешно опубликованные options
+действуют до endpoint change/Delete; для смены options нужен отдельный key или Delete.
+Входные params и содержимое options должны оставаться неизменными во время вызова.
+
+Неуспешная replacement сохраняет прежнюю cache entry. Delete удаляет запись и
+разрешает новую генерацию; завершение старого constructor возвращает обёрнутый
+ErrorClientNotFound и не публикует stale client. V3 закрывает только собственный
+idle transport при retirement/discard, не active requests и не caller transport.
+Generated v4 HTTP pools/transport ownership не изменены. V4 option errors теперь
+сохраняют cause; trust option slice v3 клонируется через slices.Clone.
+
+RED текущего cache:8constructors для8одновременных вызовов одного key в каждом
+из v3/v4. GREEN под race: один constructor/общий pointer, cancellation ожидающего,
+независимый key, Delete с поздним completion, shared failure, сохранение старой
+entry при replacement failure, API-key/password/TLS/trust rotation и first-options.
+Реальный TLS fixture v3 измеряет1auth/1TLSconnection для8получателей и закрытие
+owned idle pool после Delete. Context auth проверяется для shared/v3/Konnector;
+caller transport не закрывается. Testing/synctest заменяет ожидания по Sleep;
+новых dependencies/frameworks и performance campaigns нет.
+
+Следующий этап — общий deadline/state machine um-docs-nrsu.4.8.2, затем NIC/IP
+identity и operation reconcile. Старые constructor/cache wrappers сами по себе
+не ограничивают время; consumer должен передать context в новые entrypoints.
+Review/delivery blocker HTTP этапа сохраняется; merge/release/live gates не сняты.
+Полный strict SDK quality остаётся отдельной W2/rank90 задачей.
+
+Источники: Context7 `/golang/go`; [HTTP request context](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/net/http/request.go),
+[slices.Clone](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/slices/slices.go),
+[testing/synctest](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/testing/synctest/synctest.go),
+[Go1.27 release notes](https://go.dev/doc/go1.27). Go1.27.2 tag и release source
+повторно разрешены через GH GraphQL; runtime/tool pins сохранены.
