@@ -37,3 +37,9 @@ The project is released under version 2.0 of the [Apache license](http://www.apa
 
 
 
+
+## ioplane fork development
+
+Contribution and release rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
+The [modernization plan](docs/ru/development-plan.md) defines the sequence and
+acceptance criteria; task state is maintained in the local um-docs Beads workspace.

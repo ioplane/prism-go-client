@@ -3,7 +3,7 @@ DEV_IMAGE ?= localhost/ioplane-prism-go-client:dev
 SOURCE_REVISION := $(shell git rev-parse HEAD)
 DEV_RUN = $(PODMAN) run --rm -v $(CURDIR):/src:z -w /src \
 	-v ioplane-nutanix-driver-go-modules:/cache/modules \
-	-v ioplane-nutanix-driver-go-build:/cache/build $(DEV_IMAGE)
+	-v ioplane-nutanix-driver-go-build:/cache/build --env GOVERNANCE_TITLE --env GOVERNANCE_TITLES $(DEV_IMAGE)
 
 # These existing integration tests require the external Keploy server on :6789.
 KEPLOY_V3 = TestOperations_(CreateRecoveryPlan|GetRecoveryPlan|ListRecoveryPlans|UpdateRecoveryPlans|DeleteRecoveryPlan|GetPrismCentral|ListSubnet|GetSubnet|GetCluster|ListCluster|CreateIdempotenceIdentifers|GetIdempotenceIdentifers|DeleteIdempotenceIdentifers|CreateVM|GetVM|ListVM|UpdateVM)
@@ -21,7 +21,7 @@ unit-all:
 vet:
 	$(DEV_RUN) go vet ./...
 fmt-check:
-	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l internal/client.go internal/client_transport_test.go internal/client_response_test.go)"'
+	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l internal/client.go internal/client_transport_test.go internal/client_response_test.go .ci)"'
 build:
 	$(DEV_RUN) go build ./...
 mod-check:
@@ -29,4 +29,10 @@ mod-check:
 	$(DEV_RUN) go mod verify
 vuln:
 	$(DEV_RUN) go tool govulncheck ./...
-check: mod-check fmt-check regression unit-all vet build vuln
+check: governance mod-check fmt-check regression unit-all vet build vuln
+
+.PHONY: governance
+governance:
+	$(DEV_RUN) go test -race ./.ci
+	$(DEV_RUN) go vet ./.ci
+	$(DEV_RUN) go run ./.ci
