@@ -81,9 +81,19 @@ type cookieRefresh struct {
 
 type ClientOption func(*Client) error
 
+type proxyParseError struct{ cause error }
+
+// The original parse error may contain proxy credentials; only Unwrap exposes it.
+func (*proxyParseError) Error() string { return "error parsing proxy URL" }
+
+func (err *proxyParseError) Unwrap() error { return err.cause }
+
 // WithLogger sets the logger for the httpClient
 func WithLogger(logger *logr.Logger) ClientOption {
 	return func(c *Client) error {
+		if logger == nil {
+			return fmt.Errorf("logger must not be nil")
+		}
 		c.logger = logger
 		return nil
 	}
@@ -92,6 +102,9 @@ func WithLogger(logger *logr.Logger) ClientOption {
 // WithCredentials sets the credentials for the httpClient
 func WithCredentials(credentials *prismgoclient.Credentials) ClientOption {
 	return func(c *Client) error {
+		if credentials == nil {
+			return fmt.Errorf("credentials must not be nil")
+		}
 		c.credentials = credentials
 		if c.credentials.Insecure {
 			transport, ok := c.httpClient.Transport.(*http.Transport)
@@ -101,10 +114,10 @@ func WithCredentials(credentials *prismgoclient.Credentials) ClientOption {
 			transport.TLSClientConfig.InsecureSkipVerify = true
 		}
 		if c.credentials.ProxyURL != "" {
-			c.logger.V(1).Info("Using proxy:", "proxy", c.credentials.ProxyURL)
+			c.logger.V(1).Info("Using configured proxy")
 			proxy, err := url.Parse(c.credentials.ProxyURL)
 			if err != nil {
-				return fmt.Errorf("error parsing proxy url: %s", err)
+				return &proxyParseError{cause: err}
 			}
 			transport, ok := c.httpClient.Transport.(*http.Transport)
 			if !ok {
@@ -230,6 +243,9 @@ func NewClientWithContext(ctx context.Context, opts ...ClientOption) (*Client, e
 	c.logger = &logger
 
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, fmt.Errorf("client option must not be nil")
+		}
 		if err := opt(c); err != nil {
 			return nil, err
 		}

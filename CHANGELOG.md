@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Nil credentials, client options and loggers return constructor errors instead of panicking across shared, v3, v4 and Konnector entrypoints.
+
 - Nusights retry documentation matches the existing 10-second minimum and 300-second maximum waits. Secretdir tests use isolated temporary directories and restore environment variables, allowing read-only source mounts.
 
 - V4 error classification tolerates absent Status or Body fields promoted through nil embedded pointers while preserving the original error cause and classification from available fields.
@@ -46,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The fork requires Go 1.27.0 and pins the Go 1.27.2 development toolchain.
 
 ### Security
+
+- Proxy configuration logs omit the raw URL and proxy parse-error text is now constant. Consumers matching diagnostic strings must use errors.As with *url.Error instead; the unwrapped cause may contain credentials and must not be logged.
 
 - API response, decode, copy and close errors use safe diagnostics while retaining causes for programmatic inspection. Non-2xx body parsing and implicit server-message logging are removed.
 

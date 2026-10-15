@@ -107,6 +107,9 @@ func NewV3ClientWithContext(ctx context.Context, credentials prismgoclient.Crede
 	}
 
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, fmt.Errorf("client option must not be nil")
+		}
 		if err := opt(v3Client); err != nil {
 			return nil, err
 		}

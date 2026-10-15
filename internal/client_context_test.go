@@ -1,17 +1,24 @@
 package internal_test
 
 import (
+	"bytes"
 	"context"
-	"github.com/stretchr/testify/assert"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
+	"github.com/go-logr/logr"
 	prism "github.com/nutanix-cloud-native/prism-go-client"
 	"github.com/nutanix-cloud-native/prism-go-client/internal"
 	"github.com/nutanix-cloud-native/prism-go-client/konnector"
 	"github.com/nutanix-cloud-native/prism-go-client/v3"
+	"github.com/nutanix-cloud-native/prism-go-client/v4"
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,4 +72,54 @@ func TestClientCallerOwnedTransport(t *testing.T) {
 	require.NoError(t, err)
 	client.CloseIdleConnections()
 	assert.Zero(t, caller.closed.Load(), "caller transport remains caller-owned")
+}
+
+func TestConstructorNilInputs(t *testing.T) {
+	credentials := prism.Credentials{URL: "https://fixture.invalid", Endpoint: "fixture.invalid", APIKey: "fixture"}
+	for name, construct := range map[string]func() (any, error){
+		"credentials":   func() (any, error) { return internal.NewClient(internal.WithCredentials(nil)) },
+		"shared option": func() (any, error) { return internal.NewClient(nil) },
+		"logger": func() (any, error) {
+			return internal.NewClient(internal.WithLogger(nil), internal.WithCredentials(&credentials),
+				internal.WithUserAgent("fixture"), internal.WithAbsolutePath("fixture"))
+		},
+		"v3 option":        func() (any, error) { return v3.NewV3Client(credentials, nil) },
+		"v4 option":        func() (any, error) { return v4.NewV4Client(credentials, nil) },
+		"konnector option": func() (any, error) { return konnector.NewKonnectorAPIClient(credentials, nil) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				client, err := construct()
+				require.Nil(t, client)
+				require.Error(t, err)
+			})
+		})
+	}
+}
+
+func TestConstructorProxyDiagnostics(t *testing.T) {
+	const marker = "synthetic-proxy-secret-marker"
+	for _, proxy := range []string{
+		"http://fixture:" + marker + "@proxy.invalid:3128",
+		"http://fixture:" + marker + "@%41.invalid",
+	} {
+		t.Run(proxy, func(t *testing.T) {
+			var logs bytes.Buffer
+			logger := logr.FromSlogHandler(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+			credentials := prism.Credentials{URL: "https://fixture.invalid", ProxyURL: proxy}
+			client, err := internal.NewClient(internal.WithLogger(&logger), internal.WithCredentials(&credentials),
+				internal.WithUserAgent("fixture"), internal.WithAbsolutePath("fixture"))
+			if strings.Contains(proxy, "%41") {
+				require.Nil(t, client)
+				require.Error(t, err)
+				require.NotContains(t, err.Error(), marker)
+				var cause *url.Error
+				require.ErrorAs(t, err, &cause)
+			} else {
+				require.NoError(t, err)
+				client.CloseIdleConnections()
+			}
+			require.NotContains(t, logs.String(), marker)
+		})
+	}
 }

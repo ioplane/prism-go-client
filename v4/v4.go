@@ -135,6 +135,9 @@ func NewV4Client(credentials prismgoclient.Credentials, opts ...types.ClientOpti
 	v4Client := &Client{}
 
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, fmt.Errorf("client option must not be nil")
+		}
 		if err := opt(v4Client); err != nil {
 			return nil, fmt.Errorf("failed to apply client option: %w", err)
 		}

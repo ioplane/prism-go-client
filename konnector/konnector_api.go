@@ -90,6 +90,9 @@ func NewKonnectorAPIClientWithContext(ctx context.Context, credentials prismgocl
 		},
 	}
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, fmt.Errorf("client option must not be nil")
+		}
 		if err := opt(kc); err != nil {
 			return nil, err
 		}
