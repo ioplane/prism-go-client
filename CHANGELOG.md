@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Invalid v4 ETag and list metadata shapes return their documented empty values without reflection panics; ETag copies populate the destination without mutating shared source metadata.
+
 - V3 ListAll pagination retains the first page, advances by raw response metadata, and stops at the reported total without repeated first-page or extra empty requests. Subnet client-side filters apply to every page. Missing or inconsistent pagination metadata and entity counts return an error instead of a partial inventory or panic; host listing retains its historical single-request contract.
 
 - V4 Operation.Wait interrupts poll timers on local cancellation, terminates FAILED tasks without messages and CANCELED tasks, and keeps CANCELING pending. Missing error messages no longer panic; returned errors preserve Prism task diagnostics for synchronous callers and retain errors.Is(ErrTaskFailed).

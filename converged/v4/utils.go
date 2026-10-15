@@ -88,75 +88,97 @@ func (o *V4ODataParams) SetApplyOption(apply string) error {
 	return nil
 }
 
-// GetEtag gets the etag from the object
-// It returns the etag if the object is valid, otherwise it returns an empty string
-func GetEtag(object any) string {
-	var reserved reflect.Value
-	if reflect.TypeOf(object).Kind() == reflect.Struct {
-		reserved = reflect.ValueOf(object).FieldByName("Reserved_")
-	} else if reflect.TypeOf(object).Kind() == reflect.Interface || reflect.TypeOf(object).Kind() == reflect.Pointer {
-		reserved = reflect.ValueOf(object).Elem().FieldByName("Reserved_")
-	} else {
-		return ""
+// structField reads an exported field from a struct or its non-nil pointer.
+func structField(object any, name string) reflect.Value {
+	value := reflect.ValueOf(object)
+	if value.Kind() == reflect.Pointer {
+		value = value.Elem()
 	}
-
-	if reserved.IsValid() {
-		etagKey := strings.ToLower("Etag")
-		reservedMap := reserved.Interface().(map[string]any)
-		for k, v := range reservedMap {
-			if strings.ToLower(k) == etagKey {
-				return v.(string)
-			}
-		}
+	if value.Kind() != reflect.Struct {
+		return reflect.Value{}
 	}
-
-	return ""
+	field := value.FieldByName(name)
+	if !field.IsValid() || !field.CanInterface() {
+		return reflect.Value{}
+	}
+	return field
 }
 
-// DropEtag drops the etag from the object
-// It returns the object with the etag dropped
+func reservedMetadata(object any) map[string]any {
+	field := structField(object, "Reserved_")
+	if !field.IsValid() {
+		return nil
+	}
+	metadata, ok := field.Interface().(map[string]any)
+	if !ok {
+		return nil
+	}
+	return metadata
+}
+
+// GetEtag returns the string ETag, or an empty string for absent, invalid or conflicting metadata.
+func GetEtag(object any) string {
+	var etag string
+	found := false
+	for key, value := range reservedMetadata(object) {
+		if !strings.EqualFold(key, "etag") {
+			continue
+		}
+		token, ok := value.(string)
+		if !ok || (found && token != etag) {
+			return ""
+		}
+		etag, found = token, true
+	}
+	return etag
+}
+
+// DropEtag removes ETag keys and returns the original object.
 func DropEtag(object any) any {
-	if reflect.TypeOf(object).Kind() == reflect.Struct {
-		reserved := reflect.ValueOf(object).FieldByName("Reserved_")
-		if reserved.IsValid() {
-			reservedMap := reserved.Interface().(map[string]any)
-			allEtagKeys := make([]string, 0)
-			for k := range reservedMap {
-				if strings.ToLower(k) == "etag" {
-					allEtagKeys = append(allEtagKeys, k)
-				}
-			}
-			for _, k := range allEtagKeys {
-				delete(reservedMap, k)
-			}
+	metadata := reservedMetadata(object)
+	for key := range metadata {
+		if strings.EqualFold(key, "etag") {
+			delete(metadata, key)
 		}
 	}
 	return object
 }
 
-// CopyEtag copies the etag from the source object to the destination object
-// It returns the destination object with the etag copied
+// CopyEtag copies the ETag without mutating metadata shared with the source.
+// Pointer destinations retain their identity; struct values return an updated copy.
 func CopyEtag(source, destination any) any {
-	var reserved reflect.Value
-
-	destination = DropEtag(destination)
-	if reflect.TypeOf(source).Kind() == reflect.Struct {
-		reserved = reflect.ValueOf(source).FieldByName("Reserved_")
-	} else if reflect.TypeOf(source).Kind() == reflect.Interface || reflect.TypeOf(source).Kind() == reflect.Pointer {
-		reserved = reflect.ValueOf(source).Elem().FieldByName("Reserved_")
-	} else {
+	value := reflect.ValueOf(destination)
+	if value.Kind() == reflect.Struct {
+		copied := reflect.New(value.Type()).Elem()
+		copied.Set(value)
+		value = copied
+	} else if value.Kind() == reflect.Pointer {
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
 		return destination
 	}
-
-	if reserved.IsValid() {
-		etag := GetEtag(source)
-		if etag == "" {
-			return destination
-		}
-		reservedMap := reserved.Interface().(map[string]any)
-		reservedMap["Etag"] = etag
+	field := value.FieldByName("Reserved_")
+	if !field.IsValid() || !field.CanSet() || field.Type() != reflect.TypeFor[map[string]any]() {
+		return destination
 	}
-
+	etag := GetEtag(source)
+	metadata := maps.Clone(reservedMetadata(destination))
+	for key := range metadata {
+		if strings.EqualFold(key, "etag") {
+			delete(metadata, key)
+		}
+	}
+	if etag != "" {
+		if metadata == nil {
+			metadata = make(map[string]any)
+		}
+		metadata["Etag"] = etag
+	}
+	field.Set(reflect.ValueOf(metadata))
+	if reflect.TypeOf(destination).Kind() == reflect.Struct {
+		return value.Interface()
+	}
 	return destination
 }
 
@@ -210,28 +232,21 @@ func CallAPI[R APIResponse, T any](response R, err error) (T, error) {
 	return result, nil
 }
 
-// GetMetadataTotalResults gets the total results from the API response metadata
-// It returns the total results if the metadata is valid, otherwise it returns an error
+// GetMetadataTotalResults returns the nonnegative total, or zero for absent or invalid metadata.
 func GetMetadataTotalResults[R APIResponse](response R) int {
-    // Do not return an error if any of the fields are not found as these are optional fields.
-    hasMetadataField := reflect.ValueOf(response).Elem().FieldByName("Metadata")
-    if !hasMetadataField.IsValid() {
-        return 0
-    }
-    metadata := hasMetadataField.Interface()
-    if reflect.ValueOf(metadata).IsNil() {
-        return 0
-    }
-    totalCountField := reflect.ValueOf(metadata).Elem().FieldByName("TotalAvailableResults")
-    if !totalCountField.IsValid() || totalCountField.IsNil() {
-        return 0
-    }
-    totalCount := totalCountField.Interface().(*int)
-    if totalCount == nil || *totalCount < 0 {
-        return 0
-    }
-
-    return int(*totalCount)
+	metadata := structField(response, "Metadata")
+	if !metadata.IsValid() {
+		return 0
+	}
+	total := structField(metadata.Interface(), "TotalAvailableResults")
+	if !total.IsValid() {
+		return 0
+	}
+	count, ok := total.Interface().(*int)
+	if !ok || count == nil || *count < 0 {
+		return 0
+	}
+	return *count
 }
 
 // CallListAPI calls the list API and returns the result
