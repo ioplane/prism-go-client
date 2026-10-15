@@ -608,6 +608,9 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 	searchPaths := map[string][]string{}
 	filterMap := map[string]*prismgoclient.AdditionalFilter{}
 	for _, filter := range filters {
+		if filter == nil {
+			return nil, fmt.Errorf("additional filter must not be nil")
+		}
 		filterMap[filter.Name] = filter
 		// Build search paths by appending target search paths to base paths
 		filterSearchPaths := []string{}
@@ -621,13 +624,19 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 	// Entities that pass filters
 	var filteredEntities []interface{}
 
-	entities := res["entities"].([]interface{})
+	entities, ok := res["entities"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("filtered response entities must be an array")
+	}
 	for _, entity := range entities {
+		searchTarget, ok := entity.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("filtered response entity must be an object")
+		}
 		filtersPassed := 0
 	filter_loop:
 		for filter, filterSearchPaths := range searchPaths {
 			for _, searchPath := range filterSearchPaths {
-				searchTarget := entity.(map[string]interface{})
 				val, err := jsonpath.Get(searchPath, searchTarget)
 				if err != nil {
 					continue
