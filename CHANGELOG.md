@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Каждый HTTP client получает отдельный clone transport и TLS configuration; создание клиентов больше не изменяет общий `http.DefaultTransport`, его proxy и TLS verification. Неподдерживаемый или nil default transport возвращает ошибку вместо panic.
 
 ### Changed
+
+- New commit titles use English declarative noun phrases; PR review language and inherited commit history remain unchanged.
 - The fork requires Go 1.27.0 and pins the Go 1.27.2 development toolchain.
 
 ### Added
