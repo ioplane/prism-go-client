@@ -265,6 +265,9 @@ Review/delivery blocker HTTP этапа сохраняется; merge/release/li
 nil Message пропускается. CANCELING, QUEUED, RUNNING, SUSPENDED, UNKNOWN и
 REDACTED продолжают polling. IsDone отражает терминальность remote task;
 IsSuccess и IsFailed сохраняют проверки SUCCEEDED и FAILED соответственно.
+Ненулевые ErrorMessages сохраняются в возвращаемой ошибке Wait и Errors(),
+включая синхронные VM/Image wrappers; errors.Is(ErrTaskFailed) остаётся доступным.
+Сообщения не записываются в журнал отдельно; nil/пустой набор имеет прежний fallback.
 
 Один Operation имеет одного владельца попытки Wait; конкурентные Wait разделяют
 его polling и materialization. Контекст владельца ограничивает общую попытку;
@@ -299,6 +302,8 @@ Tasks View, p.365, chunk299193: Canceling означает начатую, не�
 Canceled — завершённую. Сгенерированные TaskStatus/EntityReference прочитаны в
 зафиксированном prism-go-client/v4 module. Источник timer/race tests:
 Context7 `/golang/go`, [testing/synctest](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/testing/synctest/synctest.go).
+Для errors.Join Context7 не вернул документацию; проверен точный
+[stdlib source Go 1.27.2](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/errors/join.go).
 Тесты используют fake task function и fake clock внутри synctest; реальных
 network requests и wall-clock sleeps нет. Public API source compatibility не
 является утверждением о Go binary ABI. Dependencies/toolchain не меняются.

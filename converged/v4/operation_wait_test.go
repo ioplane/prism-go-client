@@ -55,6 +55,9 @@ func TestOperationWaitTerminal(t *testing.T) {
 				} else {
 					require.ErrorIs(t, err, converged.ErrTaskFailed)
 					require.NotErrorIs(t, err, context.DeadlineExceeded)
+					if tc.name == "failed-message" {
+						require.ErrorContains(t, err, "failure")
+					}
 					_, resultErr := o.Results()
 					require.ErrorIs(t, resultErr, converged.ErrTaskFailed)
 					taskErrors := o.Errors()
@@ -218,7 +221,6 @@ func TestOperationWaitConcurrent(t *testing.T) {
 				_ = o.IsFailed()
 			}
 		})
-		synctest.Wait()
 		close(release)
 		wg.Wait()
 		require.Equal(t, int32(1), calls.Load())

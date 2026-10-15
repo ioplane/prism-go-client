@@ -294,6 +294,8 @@ func (o *Operation[T]) wait(ctx context.Context) ([]*T, error) {
 			err := fmt.Errorf("task %s status %s: %w", o.taskUUID, o.state.taskStatus, converged.ErrTaskFailed)
 			if len(o.state.taskErrors) == 0 {
 				o.state.taskErrors = append(o.state.taskErrors, err)
+			} else {
+				err = errors.Join(err, errors.Join(o.state.taskErrors...))
 			}
 			o.state.lock.Unlock()
 			return nil, err
