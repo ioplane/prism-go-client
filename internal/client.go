@@ -47,7 +47,8 @@ type Client struct {
 	credentials *prismgoclient.Credentials
 
 	// HTTP httpClient used to communicate with the Nutanix API.
-	httpClient *http.Client
+	httpClient     *http.Client
+	ownedTransport *http.Transport
 
 	// Base URL for API requests.
 	BaseURL *url.URL
@@ -187,6 +188,17 @@ func WithRoundTripper(transport http.RoundTripper) ClientOption {
 
 // NewClient returns a wrapper around http/https (as per isHTTP flag) httpClient with additions of proxy & session_auth if given
 func NewClient(opts ...ClientOption) (*Client, error) {
+	return NewClientWithContext(context.Background(), opts...)
+}
+
+// NewClientWithContext uses ctx for constructor authentication only.
+func NewClientWithContext(ctx context.Context, opts ...ClientOption) (*Client, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context must not be nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	c := &Client{
 		httpClient: cleanhttp.DefaultClient(),
 	}
@@ -205,6 +217,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	transport := defaultTransport.Clone()
 	transport.TLSClientConfig = &tls.Config{RootCAs: c.certpool}
 	c.httpClient.Transport = transport
+	c.ownedTransport = transport
 
 	// If the user does not specify a logger, then we'll use zap for a default one
 	// If the user specified a logger, then we'll use that logger
@@ -222,30 +235,49 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		}
 	}
 
-	if c.UserAgent == "" {
-		return nil, fmt.Errorf("userAgent argument must be passed")
+	if err := ctx.Err(); err != nil {
+		c.CloseIdleConnections()
+		return nil, err
 	}
-	if c.absolutePath == "" {
-		return nil, fmt.Errorf("absolutePath argument must be passed")
-	}
-	if c.credentials == nil {
-		return nil, fmt.Errorf("credentials argument must be passed")
-	}
-	if c.BaseURL == nil {
-		c.logger.V(1).Info("BaseURL is not set. Using URL from credentials", "url", c.credentials.URL)
-		if err := WithBaseURL(c.credentials.URL)(c); err != nil {
-			return nil, err
-		}
+	if err := c.validateOptions(); err != nil {
+		return nil, err
 	}
 
 	if c.credentials.SessionAuth {
 		c.logger.V(1).Info("Using session_auth")
-		if err := c.refreshCookies(context.Background()); err != nil {
+		if err := c.refreshCookies(ctx); err != nil {
+			c.CloseIdleConnections()
 			return nil, err
 		}
 	}
 
 	return c, nil
+}
+
+func (c *Client) validateOptions() error {
+	if c.UserAgent == "" {
+		return fmt.Errorf("userAgent argument must be passed")
+	}
+	if c.absolutePath == "" {
+		return fmt.Errorf("absolutePath argument must be passed")
+	}
+	if c.credentials == nil {
+		return fmt.Errorf("credentials argument must be passed")
+	}
+	if c.BaseURL == nil {
+		c.logger.V(1).Info("BaseURL is not set. Using URL from credentials", "url", c.credentials.URL)
+		if err := WithBaseURL(c.credentials.URL)(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CloseIdleConnections closes only the transport allocated by this client.
+func (c *Client) CloseIdleConnections() {
+	if c.ownedTransport != nil {
+		c.ownedTransport.CloseIdleConnections()
+	}
 }
 
 func decorateRequestWithAuthHeaders(req *http.Request, c *prismgoclient.Credentials) {

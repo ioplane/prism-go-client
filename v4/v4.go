@@ -10,6 +10,10 @@ import (
 
 	clusterApi "github.com/nutanix/ntnx-api-golang-clients/clustermgmt-go-client/v4/api"
 	clusterClient "github.com/nutanix/ntnx-api-golang-clients/clustermgmt-go-client/v4/client"
+	datapoliciesApi "github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4/api"
+	datapoliciesClient "github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4/client"
+	iamApi "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/api"
+	iamClient "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/client"
 	monitoringApi "github.com/nutanix/ntnx-api-golang-clients/monitoring-go-client/v4/api"
 	monitoringClient "github.com/nutanix/ntnx-api-golang-clients/monitoring-go-client/v4/client"
 	multidomainApi "github.com/nutanix/ntnx-api-golang-clients/multidomain-go-client/v4/api"
@@ -20,10 +24,6 @@ import (
 	prismClient "github.com/nutanix/ntnx-api-golang-clients/prism-go-client/v4/client"
 	vmApi "github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4/api"
 	vmClient "github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4/client"
-	datapoliciesApi "github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4/api"
-	datapoliciesClient "github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4/client"
-	iamApi "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/api"
-	iamClient "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/client"
 	volumesApi "github.com/nutanix/ntnx-api-golang-clients/volumes-go-client/v4/api"
 	volumesClient "github.com/nutanix/ntnx-api-golang-clients/volumes-go-client/v4/client"
 
@@ -136,7 +136,7 @@ func NewV4Client(credentials prismgoclient.Credentials, opts ...types.ClientOpti
 
 	for _, opt := range opts {
 		if err := opt(v4Client); err != nil {
-			return nil, fmt.Errorf("failed to apply client option: %v", err)
+			return nil, fmt.Errorf("failed to apply client option: %w", err)
 		}
 	}
 

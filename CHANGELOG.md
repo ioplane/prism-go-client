@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- V3 and v4 client caches coalesce concurrent creation per key, share constructor errors, retain the previous client when replacement fails, and prevent an in-flight constructor from republishing after Delete. Functional options use the first successful publication until endpoint change or Delete.
+- V3 cache retirement and failed shared constructor authentication close only SDK-owned idle transports; caller-supplied transports remain caller-owned. Trust bundle options no longer modify the caller's slice backing array.
+- V4 client option errors preserve their cause through errors.Is/errors.As.
+
 - Session cookies are synchronized and concurrent explicit 401 responses share one refresh per expired session version. Filtered requests use the same single-replay path; non-replayable bodies and transport errors never trigger a retry. Waiting callers can cancel independently. Initial unauthenticated request headers are preserved; session cookies are replaced only after an explicit 401.
 
 - File uploads use independent replay readers over the caller-owned regular file, with Content-Length matching the remaining range. Closing an HTTP body no longer closes or advances the source file; non-regular sources are rejected before sending.
@@ -33,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API response, decode, copy and close errors use safe diagnostics while retaining causes for programmatic inspection. Non-2xx body parsing and implicit server-message logging are removed.
 
 ### Added
+
+- Context-aware v3/Konnector constructors and v3/v4 cache entrypoints support cancellation of constructor authentication and independent waiters. Existing entrypoints retain their Background behavior; no new default deadline or generated-v4 transport policy is introduced.
 
 - Reproducible offline performance baselines with fixture assertions and repeated allocation/latency samples; benchmark smoke checks run under the race detector. No production workload or performance tuning is performed.
 
