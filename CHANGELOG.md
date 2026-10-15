@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Invalid v4 ETag and list metadata shapes return their documented empty values without reflection panics; ETag copies populate the destination without mutating shared source metadata.
+- Invalid v4 ETag and list metadata shapes, including nil embedded pointers to promoted fields, return their documented empty values without reflection panics; ETag copies populate the destination without mutating shared source metadata.
 
 - V3 ListAll pagination retains the first page, advances by raw response metadata, and stops at the reported total without repeated first-page or extra empty requests. Subnet client-side filters apply to every page. Missing or inconsistent pagination metadata and entity counts return an error instead of a partial inventory or panic; host listing retains its historical single-request contract.
 

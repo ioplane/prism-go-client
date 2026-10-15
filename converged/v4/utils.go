@@ -89,23 +89,26 @@ func (o *V4ODataParams) SetApplyOption(apply string) error {
 }
 
 // structField reads an exported field from a struct or its non-nil pointer.
-func structField(object any, name string) reflect.Value {
-	value := reflect.ValueOf(object)
+func structField(value reflect.Value, name string) reflect.Value {
 	if value.Kind() == reflect.Pointer {
 		value = value.Elem()
 	}
 	if value.Kind() != reflect.Struct {
 		return reflect.Value{}
 	}
-	field := value.FieldByName(name)
-	if !field.IsValid() || !field.CanInterface() {
+	definition, ok := value.Type().FieldByName(name)
+	if !ok {
+		return reflect.Value{}
+	}
+	field, err := value.FieldByIndexErr(definition.Index)
+	if err != nil || !field.CanInterface() {
 		return reflect.Value{}
 	}
 	return field
 }
 
 func reservedMetadata(object any) map[string]any {
-	field := structField(object, "Reserved_")
+	field := structField(reflect.ValueOf(object), "Reserved_")
 	if !field.IsValid() {
 		return nil
 	}
@@ -146,6 +149,7 @@ func DropEtag(object any) any {
 
 // CopyEtag copies the ETag without mutating metadata shared with the source.
 // Pointer destinations retain their identity; struct values return an updated copy.
+// Destinations with Reserved_ promoted through an embedded pointer are unchanged to preserve shared owners.
 func CopyEtag(source, destination any) any {
 	value := reflect.ValueOf(destination)
 	if value.Kind() == reflect.Struct {
@@ -158,7 +162,18 @@ func CopyEtag(source, destination any) any {
 	if value.Kind() != reflect.Struct {
 		return destination
 	}
-	field := value.FieldByName("Reserved_")
+	definition, ok := value.Type().FieldByName("Reserved_")
+	if !ok {
+		return destination
+	}
+	parent := value.Type()
+	for _, index := range definition.Index[:len(definition.Index)-1] {
+		parent = parent.Field(index).Type
+		if parent.Kind() == reflect.Pointer {
+			return destination
+		}
+	}
+	field := structField(value, "Reserved_")
 	if !field.IsValid() || !field.CanSet() || field.Type() != reflect.TypeFor[map[string]any]() {
 		return destination
 	}
@@ -234,11 +249,11 @@ func CallAPI[R APIResponse, T any](response R, err error) (T, error) {
 
 // GetMetadataTotalResults returns the nonnegative total, or zero for absent or invalid metadata.
 func GetMetadataTotalResults[R APIResponse](response R) int {
-	metadata := structField(response, "Metadata")
+	metadata := structField(reflect.ValueOf(response), "Metadata")
 	if !metadata.IsValid() {
 		return 0
 	}
-	total := structField(metadata.Interface(), "TotalAvailableResults")
+	total := structField(reflect.ValueOf(metadata.Interface()), "TotalAvailableResults")
 	if !total.IsValid() {
 		return 0
 	}

@@ -3,10 +3,11 @@ package v4
 import (
 	"context"
 	"encoding/json"
-	vmmConfig "github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4/models/prism/v4/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	vmmConfig "github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4/models/prism/v4/config"
 
 	vmmModels "github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4/models/vmm/v4/ahv/config"
 	"github.com/stretchr/testify/assert"
@@ -110,4 +111,71 @@ func TestEtagConflictingAliasesFailClosed(t *testing.T) {
 	assert.Empty(t, GetEtag(object))
 	_, _, err := GetEntityAndEtag(object, nil)
 	require.Error(t, err)
+}
+
+type (
+	embeddedReserved      struct{ Reserved_ map[string]any }
+	promotedReserved      struct{ *embeddedReserved }
+	promotedReservedValue struct{ embeddedReserved }
+	promotedMetadata      struct{ *fakeListMetadata }
+	promotedResponse      struct{ *unexpectedMetadataResponse }
+)
+
+func (promotedResponse) GetData() any { return nil }
+
+func TestMetadataNilPromotedFields(t *testing.T) {
+	t.Parallel()
+	source := &embeddedReserved{Reserved_: map[string]any{"Etag": "current"}}
+	t.Run("GetEtag", func(t *testing.T) {
+		assert.Empty(t, GetEtag(promotedReserved{}))
+	})
+	t.Run("DropEtag", func(t *testing.T) {
+		destination := &promotedReserved{}
+		require.Same(t, destination, DropEtag(destination))
+	})
+	t.Run("CopyEtagDestination", func(t *testing.T) {
+		destination := &promotedReserved{}
+		require.Same(t, destination, CopyEtag(source, destination))
+		assert.Nil(t, destination.embeddedReserved)
+	})
+	t.Run("CopyEtagSource", func(t *testing.T) {
+		destination := &embeddedReserved{Reserved_: map[string]any{"Etag": "stale", "other": true}}
+		require.Same(t, destination, CopyEtag(promotedReserved{}, destination))
+		assert.Equal(t, map[string]any{"other": true}, destination.Reserved_)
+	})
+	t.Run("Metadata", func(t *testing.T) {
+		assert.Zero(t, GetMetadataTotalResults(promotedResponse{}))
+	})
+	t.Run("TotalAvailableResults", func(t *testing.T) {
+		assert.Zero(t, GetMetadataTotalResults(unexpectedMetadataResponse{Metadata: promotedMetadata{}}))
+	})
+}
+
+func TestMetadataNonNilPromotedFields(t *testing.T) {
+	t.Parallel()
+	source := &promotedReserved{embeddedReserved: &embeddedReserved{Reserved_: map[string]any{"ETAG": "current"}}}
+	destination := &promotedReservedValue{}
+	require.Same(t, destination, CopyEtag(source, destination))
+	assert.Equal(t, "current", GetEtag(destination))
+	require.Same(t, destination, DropEtag(destination))
+	assert.Empty(t, GetEtag(destination))
+	assert.Equal(t, "current", GetEtag(source))
+	total := 3
+	response := promotedResponse{unexpectedMetadataResponse: &unexpectedMetadataResponse{
+		Metadata: promotedMetadata{fakeListMetadata: &fakeListMetadata{TotalAvailableResults: &total}},
+	}}
+	assert.Equal(t, total, GetMetadataTotalResults(response))
+}
+
+func TestCopyEtagPreservesSharedEmbeddedPointer(t *testing.T) {
+	t.Parallel()
+	source := &promotedReserved{embeddedReserved: &embeddedReserved{
+		Reserved_: map[string]any{"ETAG": "current", "other": true},
+	}}
+	destination := &promotedReserved{embeddedReserved: source.embeddedReserved}
+	require.Same(t, destination, CopyEtag(source, destination))
+	assert.Equal(t, map[string]any{"ETAG": "current", "other": true}, source.Reserved_)
+	value := *destination
+	assert.Equal(t, value, CopyEtag(nil, value))
+	assert.Equal(t, map[string]any{"ETAG": "current", "other": true}, source.Reserved_)
 }
