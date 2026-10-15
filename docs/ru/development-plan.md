@@ -1,6 +1,6 @@
-# Prism SDK: план модернизации v15
+# Prism SDK: план модернизации v16
 
-Дата: 2026-10-15. Источник задач — локальный Beads `um-docs-nrsu` в um-docs.
+Дата: 2026-10-16. Источник задач — локальный Beads `um-docs-nrsu` в um-docs.
 [Полный план, инфраструктурные эпики и критерии](https://um-git.infra4.dev/p.lavrukhin/um-docs/-/blob/sprint/nutanix-premerge-2026-10-15/docs/plans/nutanix-rke2-modernization/README.md).
 
 ## Порядок
@@ -317,3 +317,51 @@ Rendered declarations converged/v4 совпадают с прежним API snap
 functions/methods structs.go совпадают с parent 70ca9c60ff066dfa3ee00977d0f4c27998874245.
 Benchmark-check выполняет прежние assertions при GOMAXPROCS=2 и не является
 новым performance baseline. Полный strict quality остаётся W4/rank0.
+
+
+## SDK inventory: этап v16
+
+`um-docs-nrsu.4.8.5`, этап 1: 17 paginated `ListAll*` обёрток используют
+общий приватный обходчик. Первая страница сохраняется; offsets продвигаются
+на raw `metadata.length`, включая страницы без Entities после client-side
+filtering. FIQL, kind, sort и subnet client-side filters сохраняются между
+запросами. Для стабильных полных страниц inventories 0/1/100/101/200/201
+требуют соответственно 1/1/1/2/2/3 запросов; entities не дублируются.
+
+SDK отклоняет nil metadata, отсутствие offset/length/total_matches, отрицательные
+значения, несовпадение offset, превышение запрошенной длины или total, отсутствие
+прогресса и изменение total между страницами. Это политика целостности `ListAll`,
+не утверждение обязательности optional полей vendor schema. Число запросов
+ограничивается первым total и положительным raw progress; отдельная vendor quota
+не вводится. Короткая raw страница может потребовать больше запросов. Ошибки HTTP
+и cancellation сохраняют causes; частичный inventory при ошибке не возвращается.
+Generated `RecoveryPlanListMetadataOutput` хранит scalar int64: omitted/zero
+поля неразличимы, generated model сохраняется. Nil/empty Entities JSON сохраняется.
+
+`ListAllHost` остаётся исключением с одним запросом без length/offset.
+[Upstream PR #285](https://github.com/nutanix-cloud-native/prism-go-client/pull/285),
+[PR #287](https://github.com/nutanix-cloud-native/prism-go-client/pull/287) и
+[commit ec105a5bd601e977c448da85f5948648ee6c69b5](https://github.com/nutanix-cloud-native/prism-go-client/commit/ec105a5bd601e977c448da85f5948648ee6c69b5)
+фиксируют удаление пагинации для hosts; CHANGELOG v0.5.5 описывает этот контракт.
+Pinned `v3/swagger.json` при этом объявляет host offset/length. Конфликт источников
+сохранён явно: текущее поведение live endpoint не проверено и новым основанием
+для изменения host policy не является. Тест проверяет 201 host за один запрос.
+
+Источники pagination: pinned `v3/v3_structs.go` и `v3/swagger.json`;
+Nutanix MCP KB-6224, chunk 113253 (v3 FIQL/sort/offset/length/total_matches).
+Context7 `/nutanix-cloud-native/prism-go-client` возвращает несовместимые
+`_autodocs` int/OData примеры; реализация следует pinned types. Snapshot consistency
+при изменении inventory не гарантируется. Existing HTTP body budgets сохраняются.
+
+GPU inventory fetch, UUID matcher и consumer pin относятся к следующему этапу
+этой задачи. Полный SDK strict lint/format остаётся `um-docs-nrsu.6.10.6`;
+публичные signatures/import paths, Service и generated models сохраняются.
+Новые dependencies, frameworks, retries и caches отсутствуют.
+
+Измерено локально в pinned Podman environment: `Makefile.dev check` — exit 0,
+current SDK profile (6 linters) — 0 issues; changed Go files — gofmt clean.
+102 table cases покрывают все 17 paginated wrappers; отдельные fixtures проверяют
+12 malformed metadata shapes, пустые filtered pages, cancellation/HTTP cause,
+sort/filter preservation, nil/empty JSON и host single-fetch. 117 exported
+Operations signatures, Service и host wrapper совпадают с parent
+`031ad8c9d9871ecede484178745a479fd65dd9cf`; binary ABI не измеряется.
