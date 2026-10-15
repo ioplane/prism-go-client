@@ -154,3 +154,27 @@ func TestDecodeErrorCauseRetained(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterRejectsInvalidShapes(t *testing.T) {
+	t.Parallel()
+
+	filters := []*prismgoclient.AdditionalFilter{{Name: "name", Values: []string{"keep"}}}
+	for _, body := range []string{`{}`, `{"entities":null}`, `{"entities":{}}`,
+		`{"entities":"invalid"}`, `{"entities":[null]}`, `{"entities":[42]}`} {
+		t.Run(body, func(t *testing.T) {
+			t.Parallel()
+			_, err := filter(io.NopCloser(strings.NewReader(body)), filters, nil)
+			if err == nil {
+				t.Fatal("expected invalid entities error")
+			}
+		})
+	}
+	t.Run("nil filter", func(t *testing.T) {
+		t.Parallel()
+		_, err := filter(io.NopCloser(strings.NewReader(`{"entities":[]}`)),
+			[]*prismgoclient.AdditionalFilter{nil}, nil)
+		if err == nil {
+			t.Fatal("expected nil filter error")
+		}
+	})
+}
