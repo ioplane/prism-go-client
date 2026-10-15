@@ -159,53 +159,58 @@ func TestSessionRetryLimit(t *testing.T) {
 func TestSessionRefreshWaitCancellation(t *testing.T) {
 	for _, filtered := range []bool{false, true} {
 		t.Run(fmt.Sprint(filtered), func(t *testing.T) {
-			refreshStarted, releaseRefresh, waiterSent := make(chan struct{}), make(chan struct{}), make(chan struct{})
-			var authCalls atomic.Int32
-			client := sessionClient(t, func(w http.ResponseWriter, r *http.Request) {
-				if strings.HasSuffix(r.URL.Path, "/users/me") {
-					call := authCalls.Add(1)
-					if call == 2 {
-						close(refreshStarted)
-						<-releaseRefresh
-					}
-					http.SetCookie(w, &http.Cookie{Name: "session-id", Value: fmt.Sprint(call)})
-					return
-				}
-				cookie, _ := r.Cookie("session-id")
-				if cookie != nil && cookie.Value == "1" {
-					if r.Header.Get("Waiter") == "yes" {
-						close(waiterSent)
-					}
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-				_, _ = io.WriteString(w, `{"entities":[]}`)
-			})
-			// Release the handler before server cleanup even if an assertion fails.
-			defer close(releaseRefresh)
-			request, err := client.NewRequest(http.MethodGet, "/projects/list", nil)
-			require.NoError(t, err)
-			originalCookies := request.Header.Get("Cookie")
-			leader := make(chan error, 1)
-			go func() { leader <- sessionDo(client, context.Background(), request, false) }()
-			<-refreshStarted
-			waiterRequest, err := client.NewRequest(http.MethodGet, "/projects/list", nil)
-			require.NoError(t, err)
-			waiterRequest.Header.Set("Waiter", "yes")
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			waiter := make(chan error, 1)
-			go func() { waiter <- sessionDo(client, ctx, waiterRequest, filtered) }()
-			<-waiterSent
-			cancel()
-			require.ErrorIs(t, <-waiter, context.Canceled)
-			assert.Equal(t, int32(2), authCalls.Load(), "auth calls")
-			// The canceled waiter must return while the leader's refresh is blocked.
-			releaseRefresh <- struct{}{}
-			require.NoError(t, <-leader)
-			assert.Equal(t, originalCookies, request.Header.Get("Cookie"), "caller cookies")
+			sessionRefreshWaitCancellation(t, filtered)
 		})
 	}
+}
+
+func sessionRefreshWaitCancellation(t *testing.T, filtered bool) {
+	t.Helper()
+	refreshStarted, releaseRefresh, waiterSent := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var authCalls atomic.Int32
+	client := sessionClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/users/me") {
+			call := authCalls.Add(1)
+			if call == 2 {
+				close(refreshStarted)
+				<-releaseRefresh
+			}
+			http.SetCookie(w, &http.Cookie{Name: "session-id", Value: fmt.Sprint(call)})
+			return
+		}
+		cookie, _ := r.Cookie("session-id")
+		if cookie != nil && cookie.Value == "1" {
+			if r.Header.Get("Waiter") == "yes" {
+				close(waiterSent)
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = io.WriteString(w, `{"entities":[]}`)
+	})
+	// Release the handler before server cleanup even if an assertion fails.
+	defer close(releaseRefresh)
+	request, err := client.NewRequest(http.MethodGet, "/projects/list", nil)
+	require.NoError(t, err)
+	originalCookies := request.Header.Get("Cookie")
+	leader := make(chan error, 1)
+	go func() { leader <- sessionDo(client, context.Background(), request, false) }()
+	<-refreshStarted
+	waiterRequest, err := client.NewRequest(http.MethodGet, "/projects/list", nil)
+	require.NoError(t, err)
+	waiterRequest.Header.Set("Waiter", "yes")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	waiter := make(chan error, 1)
+	go func() { waiter <- sessionDo(client, ctx, waiterRequest, filtered) }()
+	<-waiterSent
+	cancel()
+	require.ErrorIs(t, <-waiter, context.Canceled)
+	assert.Equal(t, int32(2), authCalls.Load(), "auth calls")
+	// The canceled waiter must return while the leader's refresh is blocked.
+	releaseRefresh <- struct{}{}
+	require.NoError(t, <-leader)
+	assert.Equal(t, originalCookies, request.Header.Get("Cookie"), "caller cookies")
 }
 
 func TestSessionTransportErrorHasNoReplay(t *testing.T) {
@@ -283,9 +288,7 @@ func TestSessionResponseOwnership(t *testing.T) {
 			client.httpClient.Transport = responseTransport(func(request *http.Request) (*http.Response, error) {
 				index := calls
 				calls++
-				if index >= len(bodies) {
-					t.Fatal("unexpected request")
-				}
+				require.Less(t, index, len(bodies), "unexpected request")
 				status := http.StatusOK
 				if index == 0 {
 					status = http.StatusUnauthorized
