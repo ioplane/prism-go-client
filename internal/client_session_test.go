@@ -309,3 +309,50 @@ func TestSessionResponseOwnership(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionUnauthenticatedRequestHeaders(t *testing.T) {
+	for _, filtered := range []bool{false, true} {
+		t.Run(fmt.Sprint(filtered), func(t *testing.T) {
+			headers := make(chan string, 1)
+			client := sessionClient(t, func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/users/me") {
+					http.SetCookie(w, &http.Cookie{Name: "session-id", Value: "session"})
+					return
+				}
+				headers <- r.Header.Get("Cookie")
+				_, _ = io.WriteString(w, `{"entities":[]}`)
+			})
+			request, err := client.NewUnAuthRequest(http.MethodGet, "/projects/list", nil)
+			require.NoError(t, err)
+			request.Header.Set("Cookie", "caller=value")
+			require.NoError(t, sessionDo(client, context.Background(), request, filtered))
+			assert.Equal(t, "caller=value", <-headers, "unauthenticated headers on wire")
+			assert.Equal(t, "caller=value", request.Header.Get("Cookie"), "caller headers")
+		})
+	}
+}
+
+func TestSessionPreviouslyBuiltRequest(t *testing.T) {
+	var authCalls, resourceCalls atomic.Int32
+	client := sessionClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/users/me") {
+			http.SetCookie(w, &http.Cookie{Name: "session-id", Value: fmt.Sprint(authCalls.Add(1))})
+			return
+		}
+		resourceCalls.Add(1)
+		cookie, err := r.Cookie("session-id")
+		if err != nil || cookie.Value == "1" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = io.WriteString(w, `{"entities":[]}`)
+	})
+	request, err := client.NewRequest(http.MethodGet, "/projects/list", nil)
+	require.NoError(t, err)
+	queued, err := client.NewRequest(http.MethodGet, "/projects/list", nil)
+	require.NoError(t, err)
+	require.NoError(t, sessionDo(client, context.Background(), request, false))
+	require.NoError(t, sessionDo(client, context.Background(), queued, true))
+	assert.Equal(t, int32(2), authCalls.Load(), "stale queued cookies reuse completed refresh")
+	assert.Equal(t, int32(4), resourceCalls.Load(), "original cookie headers reach both first attempts")
+}
