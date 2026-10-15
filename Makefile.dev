@@ -21,7 +21,7 @@ unit-all:
 vet:
 	$(DEV_RUN) go vet ./...
 fmt-check:
-	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l errors.go internal/client_test.go internal/client.go internal/client_transport_test.go internal/client_response_test.go internal/client_upload_test.go internal/client_benchmark_test.go v3/cache_benchmark_test.go .ci)"'
+	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l errors.go internal/client_test.go internal/client.go internal/client_transport_test.go internal/client_response_test.go internal/client_upload_test.go internal/client_session_test.go internal/client_benchmark_test.go v3/cache_benchmark_test.go .ci)"'
 build:
 	$(DEV_RUN) go build ./...
 mod-check:

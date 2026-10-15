@@ -1,4 +1,4 @@
-# Prism SDK: план модернизации v6
+# Prism SDK: план модернизации v7
 
 Дата: 2026-10-15. Источник задач — локальный Beads `um-docs-nrsu` в um-docs.
 [Полный план, инфраструктурные эпики и критерии](https://um-git.infra4.dev/p.lavrukhin/um-docs/-/blob/sprint/nutanix-premerge-2026-10-15/docs/plans/nutanix-rke2-modernization/README.md).
@@ -173,3 +173,35 @@ golang/website blob `2d38a2be7836deca1d17451c6e03dd444f282847`: автомати
 response-body drain не восстанавливает request file offset и не меняет
 контракт GetBody. Public API/machine RPC совместимость проверяется отдельно
 от утверждений о Go binary ABI.
+
+
+## Session refresh: этап плана v7
+
+`um-docs-nrsu.4.8.7` остаётся in_progress. После upload исправлен общий send
+для Do и DoWithFilters. Mutex защищает cookies и номер session version; один
+refresh выполняется владельцем первого 401, ожидающие получают его результат
+через закрываемый channel. Сетевой вызов не удерживает mutex и не создаёт
+фоновых goroutines. Уже завершённый refresh используется поздними 401 той же
+версии. Контекст владельца ограничивает refresh; отмена отдельного ожидающего
+не отменяет владельца. Ошибка владельца передаётся его ожидающим, следующий
+новый вызов может повторить auth. Автоматического бесконечного retry нет.
+
+Повтор ресурса допускается один раз только после явного HTTP401 и при nil,
+http.NoBody или доступном GetBody. Нет повтора transport errors с неизвестным
+результатом, ошибок refresh или GetBody. Ошибка401 для non-replayable тела
+возвращается без нового auth/ресурсного запроса. Исходные headers клонируются;
+каждое тело остаётся собственностью HTTP transport. Изменения касаются общего
+internal HTTP клиента v3/Konnector, generated v4 не изменён.
+
+Критичные regression: восемь одновременных истёкших запросов обоих путей,
+два auth calls вместе с constructor и шестнадцать resource calls; одинаковые
+POST bytes; non-replayable и повторный401; отмена ожидающего при заблокированном
+refresh владельца; ошибки transport/auth/GetBody. Existing race/vet/vuln и
+consumer driver checks сохраняются. Новых dependencies, framework или
+performance campaigns нет. Constructor по-прежнему использует Background:
+контекст создания и v3/v4 cache coalescing/rotation/options остаются следующими
+подэтапами до закрытия задачи.
+
+Источники: Context7 `/golang/go`; [Request.Clone/GetBody и context](https://github.com/golang/go/blob/022c8636110ebac86a9b88724cda168ed713c21f/src/net/http/request.go),
+[Go1.27 release notes](https://go.dev/doc/go1.27). Версии runtime/tools сохранены;
+этот этап не утверждает изменение TTL cookies или семантики server-side API.

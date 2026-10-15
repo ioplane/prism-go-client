@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Session cookies are synchronized and concurrent explicit 401 responses share one refresh per expired session version. Filtered requests use the same single-replay path; non-replayable bodies and transport errors never trigger a retry. Waiting callers can cancel independently, and request headers remain caller-owned.
+
 - File uploads use independent replay readers over the caller-owned regular file, with Content-Length matching the remaining range. Closing an HTTP body no longer closes or advances the source file; non-regular sources are rejected before sending.
 
 - Nil additional filters and malformed entities now return errors instead of panicking; valid filtering and original response-body ownership are preserved.
