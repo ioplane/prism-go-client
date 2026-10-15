@@ -18,7 +18,9 @@ make -f Makefile.dev check
 ```
 
 The blocking checks cover module consistency, transport regressions, all offline
-unit packages with race detection, vet/build and whole-SDK govulncheck.
+unit packages with race detection, vet/build and root-module govulncheck.
+The independent `nusights` module has an explicit tidy/verify, compiler,
+vet/build and module-level vulnerability gate; it has no unit tests.
 The 28 existing Keploy fixtures requiring an external server are explicitly
 excluded; offline fixtures do not establish live Prism compatibility.
 

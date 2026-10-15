@@ -29,7 +29,12 @@ mod-check:
 	$(DEV_RUN) go mod verify
 vuln:
 	$(DEV_RUN) go tool govulncheck ./...
-check: governance mod-check fmt-check regression unit-all benchmark-check vet build vuln
+check: governance mod-check nusights-check fmt-check regression unit-all benchmark-check vet build vuln
+
+.PHONY: nusights-check
+nusights-check:
+	$(DEV_RUN) sh -ec 'cd nusights; go mod tidy -diff; go mod verify; go list -export -compiled ./...; go vet ./...; go test -race ./...; go build ./...'
+	$(DEV_RUN) go tool govulncheck -C nusights/client -scan module
 
 .PHONY: benchmark-check benchmark
 benchmark-check:

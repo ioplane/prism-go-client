@@ -66,7 +66,7 @@ func BenchmarkClientSessionAuth(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
-	if transport.auth != b.N+1 || transport.calls != b.N {
+	if transport.auth != b.N || transport.calls != b.N {
 		b.Fatalf("auth=%d requests=%d, want %d each", transport.auth, transport.calls, b.N)
 	}
 	b.ReportMetric(float64(transport.auth)/float64(b.N), "auth/op")
