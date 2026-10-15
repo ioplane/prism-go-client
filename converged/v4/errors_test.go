@@ -437,6 +437,54 @@ func TestGetStatusAndBody_NoFields(t *testing.T) {
 	assert.Nil(t, body)
 }
 
+type (
+	embeddedErrorStatus  struct{ Status string }
+	embeddedErrorBody    struct{ Body []byte }
+	promotedOpenAPIError struct {
+		*embeddedErrorStatus
+		*embeddedErrorBody
+	}
+)
+
+func (*promotedOpenAPIError) Error() string { return "promoted API error" }
+
+func TestGetStatusAndBodyPromotedFields(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name   string
+		input  *promotedOpenAPIError
+		status string
+		body   []byte
+		kind   error
+	}{
+		{name: "both absent", input: &promotedOpenAPIError{}},
+		{
+			name: "status absent", input: &promotedOpenAPIError{
+				embeddedErrorBody: &embeddedErrorBody{Body: makeV4Body("RATE_LIMIT_EXCEEDED", "SYS-001", "limited")},
+			},
+			body: makeV4Body("RATE_LIMIT_EXCEEDED", "SYS-001", "limited"), kind: converged.ErrRateLimit,
+		},
+		{
+			name: "body absent", input: &promotedOpenAPIError{
+				embeddedErrorStatus: &embeddedErrorStatus{Status: "404 Not Found"},
+			},
+			status: "404 Not Found", kind: converged.ErrNotFound,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			status, body := GetStatusAndBody(test.input)
+			assert.Equal(t, test.status, status)
+			assert.Equal(t, test.body, body)
+			classified := CategoriseFromOpenAPI(test.input)
+			require.Error(t, classified)
+			assert.ErrorIs(t, classified, test.input)
+			if test.kind != nil {
+				assert.ErrorIs(t, classified, test.kind)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // CategoriseFromOpenAPI
 // ---------------------------------------------------------------------------

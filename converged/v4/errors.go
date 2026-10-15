@@ -167,10 +167,10 @@ func GetStatusAndBody(err error) (status string, body []byte) {
 	if v.Kind() != reflect.Struct {
 		return "", nil
 	}
-	if f := v.FieldByName("Status"); f.IsValid() && f.Kind() == reflect.String {
+	if f := structField(v, "Status"); f.IsValid() && f.Kind() == reflect.String {
 		status = f.String()
 	}
-	if f := v.FieldByName("Body"); f.IsValid() && f.Kind() == reflect.Slice && f.Type().Elem().Kind() == reflect.Uint8 {
+	if f := structField(v, "Body"); f.IsValid() && f.Kind() == reflect.Slice && f.Type().Elem().Kind() == reflect.Uint8 {
 		body = f.Bytes()
 	}
 	return status, body
