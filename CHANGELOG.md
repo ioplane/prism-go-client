@@ -30,10 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Fork pull request titles and descriptions and new commit messages use English; commit titles retain declarative Conventional Commits.
+
 - Response diagnostics no longer echo server messages, body fields or arbitrary HTTP status text. Consumers must use `errors.As` with `ResponseError.StatusCode` and `errors.Is` with the unwrapped cause instead of matching server message strings.
 - Decoded and filtered network JSON bodies have a 64 MiB SDK limit; error bodies have a 64 KiB limit. Oversized responses return `ErrResponseTooLarge`; unfiltered `io.Writer` responses remain streaming. Large inventories must use pagination.
 
-- New commit titles use English declarative noun phrases; PR review language and inherited commit history remain unchanged.
+- New commit titles use English declarative noun phrases; owner-authorized message-only history rewrites preserve source trees and backup references.
 - The nusights module now also requires Go 1.27.0 with the pinned Go 1.27.2 toolchain. Consumers of that independent module must upgrade their compiler.
 - The fork requires Go 1.27.0 and pins the Go 1.27.2 development toolchain.
 
