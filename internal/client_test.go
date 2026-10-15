@@ -3,6 +3,7 @@ package internal
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -419,8 +420,9 @@ func TestGetResponse(t *testing.T) {
 		t.Fatal("Expected error response.")
 	}
 
-	if !strings.Contains(fmt.Sprint(err), "This field may not be blank.") {
-		t.Errorf("error = %#v, expected %#v", err, "This field may not be blank.")
+	var responseError *prismgoclient.ResponseError
+	if !errors.As(err, &responseError) || responseError.StatusCode != http.StatusBadRequest {
+		t.Errorf("error = %v, expected typed HTTP 400", err)
 	}
 }
 
@@ -438,8 +440,9 @@ func TestCheckResponse(t *testing.T) {
 		t.Fatalf("Expected error response.")
 	}
 
-	if !strings.Contains(fmt.Sprint(err), "This field may not be blank.") {
-		t.Errorf("error = %#v, expected %#v", err, "This field may not be blank.")
+	var responseError *prismgoclient.ResponseError
+	if !errors.As(err, &responseError) || responseError.StatusCode != http.StatusBadRequest {
+		t.Errorf("error = %v, expected typed HTTP 400", err)
 	}
 }
 
@@ -1173,7 +1176,10 @@ func TestDoWithFilters_ErrorCases(t *testing.T) {
 		var result map[string]interface{}
 		err = client.DoWithFilters(context.Background(), req, &result, nil, nil)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Bad request")
+		var responseError *prismgoclient.ResponseError
+		if !errors.As(err, &responseError) || responseError.StatusCode != http.StatusBadRequest {
+			t.Errorf("error = %v, expected typed HTTP 400", err)
+		}
 	})
 
 	t.Run("request with nil filters", func(t *testing.T) {

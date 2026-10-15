@@ -1,11 +1,15 @@
 package internal
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -23,8 +27,9 @@ func TestCheckResponseRejectsEveryNon2xx(t *testing.T) {
 				t.Parallel()
 
 				response := &http.Response{StatusCode: code, Body: io.NopCloser(strings.NewReader(body))}
-				if err := CheckResponse(response); err == nil {
-					t.Fatalf("HTTP %d accepted as success for body %q", code, body)
+				var responseError *prismgoclient.ResponseError
+				if err := CheckResponse(response); !errors.As(err, &responseError) || responseError.StatusCode != code {
+					t.Fatalf("HTTP %d lost typed status: %v", code, err)
 				}
 			})
 		}
@@ -118,7 +123,7 @@ func TestDoClosesOriginalHTTPErrorBody(t *testing.T) {
 func TestDoWithFiltersReturnsCloseError(t *testing.T) {
 	t.Parallel()
 
-	closeError := errors.New("fixture close error")
+	closeError := errors.New("fixture-secret-close-error")
 	body := &responseBody{Reader: strings.NewReader(`{"entities":[]}`), closeError: closeError}
 	client := responseClient(body, http.StatusOK)
 	request, err := http.NewRequest(http.MethodGet, "http://fixture.invalid", nil)
@@ -128,6 +133,9 @@ func TestDoWithFiltersReturnsCloseError(t *testing.T) {
 	err = client.DoWithFilters(context.Background(), request, nil, nil, nil)
 	if !errors.Is(err, closeError) {
 		t.Errorf("close error was lost: %v", err)
+	}
+	if strings.Contains(fmt.Sprint(err), closeError.Error()) {
+		t.Error("close error text leaked")
 	}
 }
 
@@ -177,4 +185,153 @@ func TestFilterRejectsInvalidShapes(t *testing.T) {
 			t.Fatal("expected nil filter error")
 		}
 	})
+}
+
+func TestHTTPErrorDoesNotExposeResponse(t *testing.T) {
+	const marker = "fixture-secret-marker"
+	var logs bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(previous) })
+
+	for _, body := range []string{
+		marker,
+		`{"message":"` + marker + `"}`,
+		`{"message_info":"` + marker + `"}`,
+		`{"state":"ERROR","message_list":[{"message":"` + marker + `","reason":"` + marker + `","details":"` + marker + `"}]}`,
+		`{"status":{"state":"ERROR","message_list":[{"message":"` + marker + `"}]}}`,
+	} {
+		response := &http.Response{StatusCode: http.StatusBadRequest,
+			Status: marker, Body: io.NopCloser(strings.NewReader(body))}
+		err := CheckResponse(response)
+		if err == nil || strings.Contains(fmt.Sprint(err), marker) {
+			t.Errorf("unsafe HTTP error: %v", err)
+		}
+	}
+	if strings.Contains(logs.String(), marker) {
+		t.Error("response marker leaked to log")
+	}
+}
+
+func TestResponseReadBudget(t *testing.T) {
+	const jsonLimit = 64 << 20
+	const errorLimit = 64 << 10
+	largeJSON := `{"entities":[],"padding":"` + strings.Repeat("x", jsonLimit) + `"}`
+	for _, tc := range []struct {
+		name     string
+		code     int
+		payload  string
+		limit    int
+		filtered bool
+	}{
+		{name: "decoded JSON", code: http.StatusOK, payload: largeJSON, limit: jsonLimit},
+		{name: "filtered JSON", code: http.StatusOK, payload: largeJSON, limit: jsonLimit, filtered: true},
+		{name: "error body", code: http.StatusBadRequest, payload: strings.Repeat("x", errorLimit+2), limit: errorLimit},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reader := strings.NewReader(tc.payload)
+			body := &responseBody{Reader: reader}
+			client := responseClient(body, tc.code)
+			request, err := http.NewRequest(http.MethodGet, "http://fixture.invalid", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var result map[string]any
+			if tc.filtered {
+				err = client.DoWithFilters(t.Context(), request, &result,
+					[]*prismgoclient.AdditionalFilter{{Name: "name", Values: []string{"keep"}}}, nil)
+			} else {
+				err = client.Do(t.Context(), request, &result)
+			}
+			var responseError *prismgoclient.ResponseError
+			if !errors.Is(err, prismgoclient.ErrResponseTooLarge) || !errors.As(err, &responseError) || responseError.StatusCode != tc.code {
+				t.Errorf("oversized response lost size/status classification: %v", err)
+			}
+			if read := len(tc.payload) - reader.Len(); read > tc.limit+1 {
+				t.Errorf("body bytes read=%d, limit+1=%d", read, tc.limit+1)
+			}
+			if body.closes != 1 {
+				t.Errorf("body Close calls=%d, want 1", body.closes)
+			}
+		})
+	}
+}
+
+func TestResponseCancellation(t *testing.T) {
+	for _, filtered := range []bool{false, true} {
+		t.Run(fmt.Sprint(filtered), func(t *testing.T) {
+			reading := make(chan struct{})
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.WriteString(w, `{"entities":[`)
+				w.(http.Flusher).Flush()
+				close(reading)
+				<-r.Context().Done()
+			}))
+			defer server.Close()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			client := &Client{credentials: &prismgoclient.Credentials{}, httpClient: server.Client()}
+			request, err := http.NewRequest(http.MethodGet, server.URL, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan error, 1)
+			go func() {
+				var result map[string]any
+				if filtered {
+					done <- client.DoWithFilters(ctx, request, &result,
+						[]*prismgoclient.AdditionalFilter{{Name: "name"}}, nil)
+				} else {
+					done <- client.Do(ctx, request, &result)
+				}
+			}()
+			<-reading
+			cancel()
+			if err := <-done; !errors.Is(err, context.Canceled) {
+				t.Errorf("cancellation cause lost: %v", err)
+			}
+		})
+	}
+}
+
+func TestSafeDecodeErrorsAndStreaming(t *testing.T) {
+	const marker = "fixture-secret-marker"
+	for _, filtered := range []bool{false, true} {
+		var result struct {
+			Value string `json:"fixture-secret-marker"`
+		}
+		body := &responseBody{Reader: strings.NewReader(`{"fixture-secret-marker":123}`)}
+		client := responseClient(body, http.StatusOK)
+		request, err := http.NewRequest(http.MethodGet, "http://fixture.invalid", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if filtered {
+			err = client.DoWithFilters(t.Context(), request, &result, nil, nil)
+		} else {
+			err = client.Do(t.Context(), request, &result)
+		}
+		var typeError *json.UnmarshalTypeError
+		if !errors.As(err, &typeError) || strings.Contains(fmt.Sprint(err), marker) {
+			t.Errorf("unsafe decode error or lost cause: %v", err)
+		}
+
+		body = &responseBody{Reader: strings.NewReader(marker)}
+		client = responseClient(body, http.StatusOK)
+		var output strings.Builder
+		if filtered {
+			err = client.DoWithFilters(t.Context(), request, &output, nil, nil)
+		} else {
+			err = client.Do(t.Context(), request, &output)
+		}
+		if err != nil || output.String() != marker || body.closes != 1 {
+			t.Errorf("stream changed: err=%v, data=%q, closes=%d", err, output.String(), body.closes)
+		}
+	}
+	for _, size := range []int{8, 9} {
+		_, err := readResponseBody(strings.NewReader(strings.Repeat("x", size)), 8)
+		if (size == 8 && err != nil) || (size == 9 && !errors.Is(err, prismgoclient.ErrResponseTooLarge)) {
+			t.Errorf("size %d: incorrect boundary error %v", size, err)
+		}
+	}
 }

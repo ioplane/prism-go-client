@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,11 +26,13 @@ import (
 type Scheme string
 
 const (
-	defaultBaseURL      = "%s://%s/"
-	mediaType           = "application/json"
-	formEncodedType     = "application/x-www-form-urlencoded"
-	octetStreamType     = "application/octet-stream"
-	ntnxAPIKeyHeaderKey = "X-ntnx-api-key"
+	defaultBaseURL        = "%s://%s/"
+	mediaType             = "application/json"
+	formEncodedType       = "application/x-www-form-urlencoded"
+	octetStreamType       = "application/octet-stream"
+	ntnxAPIKeyHeaderKey   = "X-ntnx-api-key"
+	maxJSONResponseBytes  = 64 << 20
+	maxErrorResponseBytes = 64 << 10
 
 	SchemeHTTP  Scheme = "http"
 	SchemeHTTPS Scheme = "https"
@@ -497,10 +498,10 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}, retry
 		if w, ok := v.(io.Writer); ok {
 			_, err = io.Copy(w, resp.Body)
 		} else {
-			err = json.NewDecoder(resp.Body).Decode(v)
+			err = decodeResponse(resp.Body, v)
 		}
 		if err != nil {
-			return fmt.Errorf("error unmarshalling json: %w", err)
+			return &prismgoclient.ResponseError{StatusCode: resp.StatusCode, Cause: err}
 		}
 	}
 
@@ -550,8 +551,8 @@ func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interfa
 
 	// Filtering and CheckResponse may replace resp.Body; retain its original owner.
 	defer func(body io.ReadCloser) {
-		if rerr := body.Close(); err == nil {
-			err = rerr
+		if rerr := body.Close(); err == nil && rerr != nil {
+			err = &prismgoclient.ResponseError{StatusCode: resp.StatusCode, Cause: rerr}
 		}
 	}(resp.Body)
 
@@ -561,21 +562,20 @@ func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interfa
 
 	resp.Body, err = filter(resp.Body, filters, baseSearchPaths)
 	if err != nil {
-		return err
+		return &prismgoclient.ResponseError{StatusCode: resp.StatusCode, Cause: err}
 	}
 
 	if v != nil {
 		if w, ok := v.(io.Writer); ok {
 			_, err = io.Copy(w, resp.Body)
-			if err != nil {
-				fmt.Printf("Error io.Copy %s", err)
-				return err
-			}
+		} else if len(filters) == 0 {
+			err = decodeResponse(resp.Body, v)
 		} else {
+			// Filtering already bounded the network body before JSON re-encoding.
 			err = json.NewDecoder(resp.Body).Decode(v)
-			if err != nil {
-				return fmt.Errorf("error unmarshalling json: %w", err)
-			}
+		}
+		if err != nil {
+			return &prismgoclient.ResponseError{StatusCode: resp.StatusCode, Cause: err}
 		}
 	}
 
@@ -595,7 +595,7 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 	}
 
 	var res map[string]interface{}
-	b, err := io.ReadAll(body)
+	b, err := readResponseBody(body, maxJSONResponseBytes)
 	if err != nil {
 		return body, err
 	}
@@ -665,79 +665,42 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 	return io.NopCloser(bytes.NewReader(filteredBody)), nil
 }
 
-// CheckResponse checks errors if exist errors in request
-func CheckResponse(r *http.Response) error {
-	c := r.StatusCode
+func readResponseBody(body io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, prismgoclient.ErrResponseTooLarge
+	}
+	return data, nil
+}
 
-	if c >= 200 && c <= 299 {
+func decodeResponse(body io.Reader, v interface{}) error {
+	data, err := readResponseBody(body, maxJSONResponseBytes)
+	if err != nil {
+		return err
+	}
+	return json.NewDecoder(bytes.NewReader(data)).Decode(v)
+}
+
+// CheckResponse rejects non-2xx status codes without exposing server diagnostics.
+func CheckResponse(r *http.Response) error {
+	if r.StatusCode >= http.StatusOK && r.StatusCode < http.StatusMultipleChoices {
 		return nil
 	}
-	statusError := fmt.Errorf("unexpected HTTP status %d (%s)", c, http.StatusText(c))
-
-	// Nutanix returns non-json response with code 401 when
-	// invalid credentials are used
-	if c == http.StatusUnauthorized {
-		return fmt.Errorf("invalid Nutanix credentials")
+	responseError := &prismgoclient.ResponseError{StatusCode: r.StatusCode}
+	if r.StatusCode == http.StatusUnauthorized {
+		return responseError
 	}
-
-	buf, err := io.ReadAll(r.Body)
+	buf, err := readResponseBody(r.Body, maxErrorResponseBytes)
 	if err != nil {
-		return err
+		responseError.Cause = err
+		return responseError
 	}
-
-	rdr2 := io.NopCloser(bytes.NewBuffer(buf))
-
-	r.Body = rdr2
-	// An entities payload does not override a failing HTTP status.
-	// if has message_list -> check_error["state"]
-	// if has status -> check_error["status.state"]
-	if len(buf) == 0 {
-		return statusError
-	}
-
-	var res map[string]interface{}
-	err = json.Unmarshal(buf, &res)
-	if err != nil {
-		return fmt.Errorf("unmarshalling error response %s for response body %s", err, string(buf))
-	}
-
-	errRes := &ErrorResponse{}
-	if status, ok := res["status"]; ok {
-		statusObject, ok := status.(map[string]interface{})
-		if !ok {
-			return statusError
-		}
-
-		err = fillStruct(statusObject, errRes)
-	} else if _, ok := res["state"]; ok {
-		err = fillStruct(res, errRes)
-	} else if _, ok := res["entities"]; ok {
-		return statusError
-	}
-
-	if err != nil {
-		return err
-	}
-
-	// konnector-server error check
-	if messageInfo, ok := res["message_info"]; ok {
-		return fmt.Errorf("error: %s", messageInfo)
-	}
-
-	// This check is also used for some foundation api errors
-	if message, ok := res["message"]; ok {
-		log.Print(message)
-		return fmt.Errorf("error: %s", message)
-	}
-	if errRes.State != "ERROR" {
-		return statusError
-	}
-
-	pretty, err := json.MarshalIndent(errRes, "", "  ")
-	if err != nil {
-		return fmt.Errorf("status: %s, error-response: %+v, marshal error: %v", r.Status, errRes, err)
-	}
-	return fmt.Errorf("status: %s, error-response: %s", r.Status, string(pretty))
+	// Preserve bounded error-body replay; the caller still closes the original body.
+	r.Body = io.NopCloser(bytes.NewReader(buf))
+	return responseError
 }
 
 // ErrorResponse ...
