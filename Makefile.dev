@@ -20,6 +20,6 @@ unit-all:
 vet:
 	$(DEV_RUN) go vet ./internal ./v3
 fmt-check:
-	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l internal/client.go internal/client_transport_test.go)"'
+	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l internal/client.go internal/client_transport_test.go internal/client_response_test.go)"'
 build:
 	$(DEV_RUN) go build ./internal ./v3
