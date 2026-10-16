@@ -46,6 +46,10 @@ func (prov *provider) getAdditionalTrustBundle() (string, error) {
 
 func (prov *provider) getCredentials(_ types.Topology) (*types.ApiCredentials, error) {
 	ref := prov.prismEndpoint.CredentialRef
+	if ref == nil {
+		return nil, fmt.Errorf("credential reference must not be nil")
+	}
+
 	secret, err := prov.secretInformer.Lister().Secrets(ref.Namespace).Get(ref.Name)
 	if err != nil {
 		return nil, err

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Kubernetes environment providers reject a missing credential reference with a configuration error before accessing informers, instead of panicking or falling back to another provider. Valid references and original Secret lookup errors are preserved.
+
 - Environment lookups continue to the next provider for wrapped ErrNotFound errors and return the canonical missing-key error after exhaustion. Hard errors and successful nil values still stop lookup, preserving provider order and original hard-error identity.
 
 - A nil RoundTripper option restores the client's private default transport, preserving its TLS/proxy settings instead of falling back to the process-global transport. A typed-nil *http.Transport returns an explicit constructor error; external RoundTripper implementations with working nil receivers remain supported.

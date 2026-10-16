@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"testing"
@@ -127,6 +128,13 @@ binaryData:
 		secretInformer = runSecretInformer(context.TODO(), fakeClientset)
 		cmInformer = runCMInformer(context.TODO(), fakeClientset)
 		prov = NewProvider(prismEndpoint, secretInformer, cmInformer)
+	})
+	It("rejects missing credential reference before informer access", func() {
+		invalid := NewProvider(credentials.NutanixPrismEndpoint{}, nil, nil)
+		endpoint, err := invalid.GetManagementEndpoint(nil)
+		Expect(endpoint).To(BeNil())
+		Expect(err).To(MatchError("credential reference must not be nil"))
+		Expect(errors.Is(err, types.ErrNotFound)).To(BeFalse())
 	})
 	It("must be able to look up secret", func() {
 		_, err := fakeClientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
