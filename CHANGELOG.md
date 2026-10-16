@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Secret-directory environment endpoint parse errors now use constant diagnostics instead of echoing endpoint contents, including userinfo and query values. Migration: use `errors.As` with `*url.Error` instead of matching raw parser text; the retained `URL` and unwrapped cause may contain credentials and must not be logged.
+
 - Local and Kubernetes environment endpoint parse errors now use constant diagnostic text and retain the original *url.Error cause. Consumers must replace diagnostic string matching with errors.As; unwrapped URLs/errors may contain credentials or tokens and must not be logged. Valid URL parsing, default ports and credential lookup are unchanged.
 
 - V4 endpoint parse-error text is now constant and constructor initialization errors preserve their original cause. Consumers must replace diagnostic string matching with errors.As for *url.Error or *strconv.NumError, or errors.Is for the underlying cause; unwrapped endpoint/port diagnostics may contain credentials or tokens and must not be logged. Valid endpoint parsing and the default port are unchanged.

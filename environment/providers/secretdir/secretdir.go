@@ -31,6 +31,16 @@ var ErrMissingValue = errors.New("missing information in secret value " +
 
 type provider struct{}
 
+type endpointParseError struct {
+	cause error
+}
+
+func (*endpointParseError) Error() string {
+	return "error parsing secret directory environment endpoint"
+}
+
+func (err *endpointParseError) Unwrap() error { return err.cause }
+
 // GetManagementEndpoint returns PC credentials independent of HCI cluster.
 func (*provider) GetManagementEndpoint(
 	_ types.Topology,
@@ -84,7 +94,12 @@ func getAPIEndpoint(path string) (*url.URL, error) {
 		return nil, errors.New("no endpoint is provided in secret value")
 	}
 
-	return url.Parse("https://" + endpoint)
+	address, err := url.Parse("https://" + endpoint)
+	if err != nil {
+		return nil, &endpointParseError{cause: err}
+	}
+
+	return address, nil
 }
 
 func getInsecure(path string) (bool, error) {
@@ -170,7 +185,7 @@ func getMgmtEndpointFromSecretDir(path string) (
 
 	addr, err := url.Parse("https://" + creds[0] + ":" + creds[1])
 	if err != nil {
-		return nil, err
+		return nil, &endpointParseError{cause: err}
 	}
 
 	return &types.ManagementEndpoint{

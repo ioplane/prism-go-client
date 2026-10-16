@@ -1,6 +1,7 @@
 package secretdir
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -160,4 +161,44 @@ func TestNutanixAPIKeyAuth(t *testing.T) {
 		Insecure: true,
 		Address:  addr,
 	}))
+}
+
+func TestEndpointDiagnostics(t *testing.T) {
+	const (
+		marker      = "synthetic-secretdir-url-secret-marker"
+		userinfo    = "fixture:" + marker + "@%41.invalid"
+		query       = "%41.invalid?token=" + marker
+		fixtureData = `[{"type":"api_key","data":{"prismCentral":{"apiKey":"fixture-api-key"}}}]`
+	)
+
+	tests := []struct{ name, authKey, authValue, endpoint string }{
+		{"JSON userinfo", secretKeyCredentials, fixtureData, userinfo},
+		{"JSON query", secretKeyCredentials, fixtureData, query},
+		{"TLS userinfo", secretKeyCertName, "fixture-keypair", userinfo},
+		{"TLS query", secretKeyCertName, "fixture-keypair", query},
+		{"legacy query", secretKeyName, query + ":9440:fixture-user:fixture-password", query + fixturePortSuffix},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			matcher := gomega.NewWithT(t)
+			path := t.TempDir()
+			t.Setenv(envSecretDir, path)
+			matcher.Expect(writeParam(t, path, test.authKey, test.authValue)).To(gomega.Succeed())
+
+			if test.authKey != secretKeyName {
+				matcher.Expect(writeParam(t, path, secretKeyEndpoint, test.endpoint)).To(gomega.Succeed())
+			}
+
+			endpoint, err := NewProvider().GetManagementEndpoint(nil)
+			matcher.Expect(endpoint).To(gomega.BeNil())
+			matcher.Expect(err).To(gomega.HaveOccurred())
+			matcher.Expect(err.Error()).NotTo(gomega.ContainSubstring(marker))
+
+			var cause *url.Error
+			matcher.Expect(errors.As(err, &cause)).To(gomega.BeTrue())
+			matcher.Expect(cause.URL).To(gomega.Equal("https://" + test.endpoint))
+			matcher.Expect(cause.Op).To(gomega.Equal("parse"))
+			matcher.Expect(cause.Err).To(gomega.HaveOccurred())
+		})
+	}
 }
