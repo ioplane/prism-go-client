@@ -120,6 +120,19 @@ type endpointInfo struct {
 	port int
 }
 
+// endpointParseError retains the parse cause without echoing endpoint credentials.
+type endpointParseError struct {
+	cause error
+}
+
+func (e *endpointParseError) Error() string {
+	return "error parsing API endpoint"
+}
+
+func (e *endpointParseError) Unwrap() error {
+	return e.cause
+}
+
 // NewV4Client return an internal to operate V4 resources
 func NewV4Client(credentials prismgoclient.Credentials, opts ...types.ClientOption[Client]) (*Client, error) {
 	if credentials.APIKey != "" {
@@ -144,55 +157,55 @@ func NewV4Client(credentials prismgoclient.Credentials, opts ...types.ClientOpti
 	}
 
 	if err := initVmApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create VM API instance: %v", err)
+		return nil, fmt.Errorf("failed to create VM API instance: %w", err)
 	}
 
 	if err := initSubnetApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Subnet API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Subnet API instance: %w", err)
 	}
 
 	if err := initClusterApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Cluster API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Cluster API instance: %w", err)
 	}
 
 	if err := initPrismApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Tasks API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Tasks API instance: %w", err)
 	}
 
 	if err := initVolumesApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Volumes API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Volumes API instance: %w", err)
 	}
 
 	if err := initUsersApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Users API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Users API instance: %w", err)
 	}
 
 	if err := initRolesApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Roles API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Roles API instance: %w", err)
 	}
 
 	if err := initRoleMembershipApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Role Membership API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Role Membership API instance: %w", err)
 	}
 
 	if err := initOperationsApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Operations API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Operations API instance: %w", err)
 	}
 
 	if err := initAuthorizationPoliciesApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Authorization Policies API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Authorization Policies API instance: %w", err)
 	}
 
 	if err := initDataPoliciesApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Data Policies API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Data Policies API instance: %w", err)
 	}
 
 	if err := initProjectsApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Projects API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Projects API instance: %w", err)
 	}
 
 	if err := initAlertsServiceApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Alerts API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Alerts API instance: %w", err)
 	}
 
 	return v4Client, nil
@@ -445,7 +458,7 @@ func initAuthorizationPoliciesApiInstance(v4Client *Client, credentials prismgoc
 func getEndpointInfo(credentials prismgoclient.Credentials) (*endpointInfo, error) {
 	u, err := url.Parse(fmt.Sprintf("https://%s", credentials.Endpoint))
 	if err != nil {
-		return nil, err
+		return nil, &endpointParseError{cause: err}
 	}
 	h := u.Hostname()
 	port := u.Port()
@@ -454,7 +467,7 @@ func getEndpointInfo(credentials prismgoclient.Credentials) (*endpointInfo, erro
 	}
 	p, err := strconv.Atoi(port)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert port number to int: %v", err)
+		return nil, &endpointParseError{cause: err}
 	}
 	return &endpointInfo{
 		host: h,

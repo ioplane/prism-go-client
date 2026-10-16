@@ -2,12 +2,46 @@ package v4
 
 import (
 	"errors"
+	"net/url"
 	"strconv"
 	"testing"
 
 	prismgoclient "github.com/nutanix-cloud-native/prism-go-client"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestNewV4ClientEndpointDiagnostics(t *testing.T) {
+	const marker = "synthetic-endpoint-secret-marker"
+	const overflowPort = "999999999999999999999999999999"
+	for _, test := range []struct {
+		name     string
+		endpoint string
+		urlError bool
+	}{
+		{name: "invalid host", endpoint: "fixture:" + marker + "@%41.invalid", urlError: true},
+		{name: "invalid port", endpoint: "fixture:" + marker + "@fixture.invalid:invalid", urlError: true},
+		{name: "overflow port", endpoint: "fixture:" + marker + "@fixture.invalid:" + overflowPort},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client, err := NewV4Client(prismgoclient.Credentials{Endpoint: test.endpoint, APIKey: "fixture"})
+			require.Nil(t, client)
+			require.Error(t, err)
+			require.NotContains(t, err.Error(), marker)
+			require.NotContains(t, err.Error(), overflowPort)
+			if test.urlError {
+				var cause *url.Error
+				require.ErrorAs(t, err, &cause)
+				require.Equal(t, "https://"+test.endpoint, cause.URL)
+			} else {
+				var cause *strconv.NumError
+				require.ErrorAs(t, err, &cause)
+				require.Equal(t, overflowPort, cause.Num)
+				require.ErrorIs(t, err, strconv.ErrRange)
+			}
+		})
+	}
+}
 
 func TestNewV4ClientBasicAuth(t *testing.T) {
 	// verifies positive client creation

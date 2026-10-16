@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- V4 endpoint parse-error text is now constant and constructor initialization errors preserve their original cause. Consumers must replace diagnostic string matching with errors.As for *url.Error or *strconv.NumError, or errors.Is for the underlying cause; unwrapped endpoint/port diagnostics may contain credentials or tokens and must not be logged. Valid endpoint parsing and the default port are unchanged.
+
 - API base-URL configuration logs omit the raw URL and base-URL parse-error text is now constant. Consumers must use errors.As with *url.Error instead of diagnostic string matching; the unwrapped URL/cause may contain credentials or tokens and must not be logged. Valid URL parsing and the original parse cause are preserved.
 
 - Proxy configuration logs omit the raw URL and proxy parse-error text is now constant. Consumers matching diagnostic strings must use errors.As with *url.Error instead; the unwrapped cause may contain credentials and must not be logged.
