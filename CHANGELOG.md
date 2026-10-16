@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Request-path parse errors and HTTP client transport errors now use constant diagnostics instead of echoing URLs and query values. Migration: replace direct `*url.Error` assertions with `errors.As`; `errors.Is`, direct `net.Error` timeout/temporary classification and `os.IsTimeout` remain supported. Retained URLs and unwrapped causes may contain credentials and must not be logged.
+
 - Secret-directory environment endpoint parse errors now use constant diagnostics instead of echoing endpoint contents, including userinfo and query values. Migration: use `errors.As` with `*url.Error` instead of matching raw parser text; the retained `URL` and unwrapped cause may contain credentials and must not be logged.
 
 - Local and Kubernetes environment endpoint parse errors now use constant diagnostic text and retain the original *url.Error cause. Consumers must replace diagnostic string matching with errors.As; unwrapped URLs/errors may contain credentials or tokens and must not be logged. Valid URL parsing, default ports and credential lookup are unchanged.

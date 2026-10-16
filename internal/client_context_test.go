@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"sync/atomic"
 	"testing"
 
@@ -57,9 +59,15 @@ func TestConstructorContextCancellation(t *testing.T) {
 	}
 }
 
-type contextTransport struct{ closed atomic.Int32 }
+type contextTransport struct {
+	closed atomic.Int32
+	cause  error
+}
 
-func (*contextTransport) RoundTrip(*http.Request) (*http.Response, error) {
+func (transport *contextTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	if transport != nil && transport.cause != nil {
+		return nil, transport.cause
+	}
 	return nil, context.Canceled
 }
 func (t *contextTransport) CloseIdleConnections() { t.closed.Add(1) }
@@ -140,6 +148,81 @@ func TestConstructorURLDiagnostics(t *testing.T) {
 				client.CloseIdleConnections()
 			}
 			require.NotContains(t, logs.String(), marker)
+		})
+	}
+}
+
+func TestRequestURLDiagnostics(t *testing.T) {
+	const marker = "synthetic-request-url-marker"
+	const path = "/bad%zz?token=" + marker
+	const absolutePath = "api/nutanix/v3"
+	client, err := internal.NewClient(
+		internal.WithCredentials(&prism.Credentials{URL: "https://fixture.invalid"}),
+		internal.WithUserAgent("fixture"), internal.WithAbsolutePath(absolutePath))
+	require.NoError(t, err)
+	builders := []struct {
+		name  string
+		build func() (*http.Request, error)
+	}{
+		{"unauth", func() (*http.Request, error) { return client.NewUnAuthRequest(http.MethodGet, path, nil) }},
+		{"auth", func() (*http.Request, error) { return client.NewRequest(http.MethodGet, path, nil) }},
+		{"form", func() (*http.Request, error) { return client.NewUnAuthFormEncodedRequest(http.MethodPost, path, nil) }},
+		{"upload", func() (*http.Request, error) { return client.NewUnAuthUploadRequest(http.MethodPut, path, nil) }},
+		{"auth-upload", func() (*http.Request, error) { return client.NewUploadRequest(http.MethodPut, path, nil) }},
+	}
+	for _, builder := range builders {
+		t.Run(builder.name, func(t *testing.T) {
+			request, err := builder.build()
+			require.Nil(t, request)
+			require.Error(t, err)
+			assert.NotContains(t, err.Error(), marker)
+			var cause *url.Error
+			require.ErrorAs(t, err, &cause)
+			assert.Equal(t, absolutePath+path, cause.URL)
+			assert.Equal(t, "parse", cause.Op)
+		})
+	}
+}
+
+func TestTransportURLDiagnostics(t *testing.T) {
+	const marker = "synthetic-transport-url-marker"
+	const target = "https://fixture.invalid/request?token=" + marker
+	for _, test := range []struct {
+		name     string
+		filtered bool
+		cause    error
+		timeout  bool
+	}{
+		{"Do", false, context.Canceled, false},
+		{"DoWithFilters", true, context.DeadlineExceeded, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client, err := internal.NewClient(
+				internal.WithCredentials(&prism.Credentials{URL: "https://fixture.invalid"}),
+				internal.WithRoundTripper(&contextTransport{cause: test.cause}),
+				internal.WithUserAgent("fixture"), internal.WithAbsolutePath("api/nutanix/v3"))
+			require.NoError(t, err)
+			request, err := http.NewRequest(http.MethodGet, target, nil)
+			require.NoError(t, err)
+			if test.filtered {
+				err = client.DoWithFilters(t.Context(), request, nil, nil, nil)
+			} else {
+				err = client.Do(t.Context(), request, nil)
+			}
+			require.Error(t, err)
+			assert.NotContains(t, err.Error(), marker)
+			require.ErrorIs(t, err, test.cause)
+			var cause *url.Error
+			require.ErrorAs(t, err, &cause)
+			assert.Equal(t, target, cause.URL)
+			assert.Equal(t, "Get", cause.Op)
+			networkError, ok := err.(net.Error)
+			require.True(t, ok)
+			assert.Equal(t, test.timeout, networkError.Timeout())
+			assert.Equal(t, test.timeout, os.IsTimeout(err))
+			temporary, ok := err.(interface{ Temporary() bool })
+			require.True(t, ok)
+			assert.Equal(t, test.timeout, temporary.Temporary())
 		})
 	}
 }

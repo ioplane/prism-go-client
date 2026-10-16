@@ -508,7 +508,8 @@ func TestDo_redirectLoop(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error to be returned.")
 	}
-	if err, ok := err.(*url.Error); !ok {
+	var urlError *url.Error
+	if !errors.As(err, &urlError) {
 		t.Errorf("Expected a URL error; got %#v.", err)
 	}
 }

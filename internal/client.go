@@ -81,15 +81,27 @@ type cookieRefresh struct {
 
 type ClientOption func(*Client) error
 
-type urlParseError struct {
+type urlDiagnosticError struct {
 	message string
 	cause   error
 }
 
-// The original parse error may contain credentials; only Unwrap exposes it.
-func (err *urlParseError) Error() string { return err.message }
+// The original URL error may contain credentials; only Unwrap exposes it.
+func (err *urlDiagnosticError) Error() string { return err.message }
 
-func (err *urlParseError) Unwrap() error { return err.cause }
+func (err *urlDiagnosticError) Unwrap() error { return err.cause }
+
+func (err *urlDiagnosticError) Timeout() bool {
+	cause, ok := err.cause.(interface{ Timeout() bool })
+
+	return ok && cause.Timeout()
+}
+
+func (err *urlDiagnosticError) Temporary() bool {
+	cause, ok := err.cause.(interface{ Temporary() bool })
+
+	return ok && cause.Temporary()
+}
 
 // WithLogger sets the logger for the httpClient
 func WithLogger(logger *logr.Logger) ClientOption {
@@ -120,7 +132,7 @@ func WithCredentials(credentials *prismgoclient.Credentials) ClientOption {
 			c.logger.V(1).Info("Using configured proxy")
 			proxy, err := url.Parse(c.credentials.ProxyURL)
 			if err != nil {
-				return &urlParseError{message: "error parsing proxy URL", cause: err}
+				return &urlDiagnosticError{message: "error parsing proxy URL", cause: err}
 			}
 			transport, ok := c.httpClient.Transport.(*http.Transport)
 			if !ok {
@@ -152,7 +164,7 @@ func WithBaseURL(baseURL string) ClientOption {
 		}
 		u, err := url.Parse(baseURL)
 		if err != nil {
-			return &urlParseError{message: "error parsing base URL", cause: err}
+			return &urlDiagnosticError{message: "error parsing base URL", cause: err}
 		}
 		if u.Path == "" {
 			u.Path = "/"
@@ -352,7 +364,7 @@ func (c *Client) refreshCookies(ctx context.Context) error {
 
 	req = req.WithContext(ctx)
 	decorateRequestWithAuthHeaders(req, c.credentials)
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doHTTPRequest(req)
 	if err != nil {
 		return err
 	}
@@ -396,7 +408,7 @@ func (c *Client) NewUnAuthRequest(method, urlStr string, body interface{}) (*htt
 	// create main api url
 	rel, err := url.Parse(c.absolutePath + urlStr)
 	if err != nil {
-		return nil, err
+		return nil, &urlDiagnosticError{message: "error parsing request URL", cause: err}
 	}
 
 	u := c.BaseURL.ResolveReference(rel)
@@ -431,7 +443,7 @@ func (c *Client) NewUnAuthFormEncodedRequest(method, urlStr string, body map[str
 	// create main api url
 	rel, err := url.Parse(c.absolutePath + urlStr)
 	if err != nil {
-		return nil, err
+		return nil, &urlDiagnosticError{message: "error parsing request URL", cause: err}
 	}
 	u := c.BaseURL.ResolveReference(rel)
 
@@ -475,7 +487,7 @@ func (c *Client) NewUnAuthUploadRequest(method, urlStr string, fileReader *os.Fi
 	}
 	rel, errp := url.Parse(c.absolutePath + urlStr)
 	if errp != nil {
-		return nil, errp
+		return nil, &urlDiagnosticError{message: "error parsing request URL", cause: errp}
 	}
 
 	u := c.BaseURL.ResolveReference(rel)
@@ -553,6 +565,16 @@ func (c *Client) refreshSession(req *http.Request, version uint64) error {
 	return err
 }
 
+// doHTTPRequest hides URL diagnostics while retaining response and body ownership.
+func (c *Client) doHTTPRequest(req *http.Request) (*http.Response, error) {
+	response, err := c.httpClient.Do(req)
+	if err != nil {
+		return response, &urlDiagnosticError{message: "error sending HTTP request", cause: err}
+	}
+
+	return response, nil
+}
+
 // send permits one explicit 401 replay; transport errors never trigger a replay.
 func (c *Client) send(req *http.Request) (*http.Response, error) {
 	var version uint64
@@ -561,7 +583,7 @@ func (c *Client) send(req *http.Request) (*http.Response, error) {
 		version = c.sessionVersion
 		c.sessionMu.Unlock()
 	}
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doHTTPRequest(req)
 	if err != nil || !c.credentials.SessionAuth || resp.StatusCode != http.StatusUnauthorized ||
 		(req.Body != nil && req.Body != http.NoBody && req.GetBody == nil) {
 		return resp, err
@@ -582,7 +604,7 @@ func (c *Client) send(req *http.Request) (*http.Response, error) {
 	clearCookiesInRequest(req)
 	decorateRequestWithCookies(req, c.cookies)
 	c.sessionMu.Unlock()
-	return c.httpClient.Do(req)
+	return c.doHTTPRequest(req)
 }
 
 // Do performs the request with at most one session-auth replay.
