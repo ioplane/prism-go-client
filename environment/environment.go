@@ -17,6 +17,8 @@
 package environment
 
 import (
+	"errors"
+
 	"github.com/nutanix-cloud-native/prism-go-client/environment/providers/configmap"
 	"github.com/nutanix-cloud-native/prism-go-client/environment/providers/local"
 	"github.com/nutanix-cloud-native/prism-go-client/environment/providers/secretdir"
@@ -56,7 +58,7 @@ func (e *env) GetManagementEndpoint(topology types.Topology) (
 ) {
 	for _, provider := range e.providers {
 		if me, err := provider.GetManagementEndpoint(topology); err == nil ||
-			err != types.ErrNotFound {
+			!errors.Is(err, types.ErrNotFound) {
 			return me, err
 		}
 	}
@@ -67,7 +69,7 @@ func (e *env) GetManagementEndpoint(topology types.Topology) (
 func (e *env) Get(topology types.Topology, key string) (interface{}, error) {
 	for _, provider := range e.providers {
 		if val, err := provider.Get(topology, key); err == nil ||
-			err != types.ErrNotFound {
+			!errors.Is(err, types.ErrNotFound) {
 			return val, err
 		}
 	}

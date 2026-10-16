@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Environment lookups continue to the next provider for wrapped ErrNotFound errors and return the canonical missing-key error after exhaustion. Hard errors and successful nil values still stop lookup, preserving provider order and original hard-error identity.
+
 - A nil RoundTripper option restores the client's private default transport, preserving its TLS/proxy settings instead of falling back to the process-global transport. A typed-nil *http.Transport returns an explicit constructor error; external RoundTripper implementations with working nil receivers remain supported.
 
 - Nil credentials, client options and loggers return constructor errors instead of panicking across shared, v3, v4 and Konnector entrypoints.
