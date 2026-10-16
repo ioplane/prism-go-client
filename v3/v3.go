@@ -1,6 +1,7 @@
 package v3
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -82,6 +83,11 @@ func WithUserAgent(userAgent string) types.ClientOption[Client] {
 
 // NewV3Client return a internal to operate V3 resources
 func NewV3Client(credentials prismgoclient.Credentials, opts ...types.ClientOption[Client]) (*Client, error) {
+	return NewV3ClientWithContext(context.Background(), credentials, opts...)
+}
+
+// NewV3ClientWithContext uses ctx for constructor authentication only.
+func NewV3ClientWithContext(ctx context.Context, credentials prismgoclient.Credentials, opts ...types.ClientOption[Client]) (*Client, error) {
 	if credentials.APIKey != "" {
 		if credentials.Endpoint == "" {
 			return nil, fmt.Errorf("endpoint is required for api key auth")
@@ -101,12 +107,15 @@ func NewV3Client(credentials prismgoclient.Credentials, opts ...types.ClientOpti
 	}
 
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, fmt.Errorf("client option must not be nil")
+		}
 		if err := opt(v3Client); err != nil {
 			return nil, err
 		}
 	}
 
-	httpClient, err := internal.NewClient(v3Client.clientOpts...)
+	httpClient, err := internal.NewClientWithContext(ctx, v3Client.clientOpts...)
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,16 @@
+FROM docker.io/library/golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e
+ARG SOURCE_REVISION=a96bca31c203b776972eb9f2117f9f0a5e2e6d33
+LABEL org.opencontainers.image.title="Prism SDK development" \
+      org.opencontainers.image.description="Pinned Go environment for isolated SDK regression tests" \
+      org.opencontainers.image.source="https://github.com/ioplane/prism-go-client" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.version="go1.27.2" \
+      org.opencontainers.image.created="2026-10-15T00:00:00Z" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.base.name="docker.io/library/golang:1.27.2-trixie" \
+      org.opencontainers.image.base.digest="sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e"
+ENV GOFLAGS="-mod=readonly -buildvcs=false" GOTOOLCHAIN=local GOENV=off \
+    GOPROXY=https://proxy.golang.org,direct GOSUMDB=sum.golang.org \
+    GOCACHE=/cache/build GOMODCACHE=/cache/modules CGO_ENABLED=1
+WORKDIR /src
+CMD ["bash"]

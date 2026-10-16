@@ -9,11 +9,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/PaesslerAG/jsonpath"
 	"github.com/go-logr/logr"
@@ -27,11 +27,13 @@ import (
 type Scheme string
 
 const (
-	defaultBaseURL      = "%s://%s/"
-	mediaType           = "application/json"
-	formEncodedType     = "application/x-www-form-urlencoded"
-	octetStreamType     = "application/octet-stream"
-	ntnxAPIKeyHeaderKey = "X-ntnx-api-key"
+	defaultBaseURL        = "%s://%s/"
+	mediaType             = "application/json"
+	formEncodedType       = "application/x-www-form-urlencoded"
+	octetStreamType       = "application/octet-stream"
+	ntnxAPIKeyHeaderKey   = "X-ntnx-api-key"
+	maxJSONResponseBytes  = 64 << 20
+	maxErrorResponseBytes = 64 << 10
 
 	SchemeHTTP  Scheme = "http"
 	SchemeHTTPS Scheme = "https"
@@ -45,7 +47,8 @@ type Client struct {
 	credentials *prismgoclient.Credentials
 
 	// HTTP httpClient used to communicate with the Nutanix API.
-	httpClient *http.Client
+	httpClient     *http.Client
+	ownedTransport *http.Transport
 
 	// Base URL for API requests.
 	BaseURL *url.URL
@@ -53,7 +56,10 @@ type Client struct {
 	// User agent for httpClient
 	UserAgent string
 
-	cookies []*http.Cookie
+	cookies        []*http.Cookie
+	sessionMu      sync.Mutex
+	sessionVersion uint64
+	sessionRefresh *cookieRefresh
 
 	// Optional function called after every successful request made.
 	onRequestCompleted RequestCompletionCallback
@@ -68,11 +74,41 @@ type Client struct {
 	certpool *x509.CertPool
 }
 
+type cookieRefresh struct {
+	done chan struct{}
+	err  error
+}
+
 type ClientOption func(*Client) error
+
+type urlDiagnosticError struct {
+	message string
+	cause   error
+}
+
+// The original URL error may contain credentials; only Unwrap exposes it.
+func (err *urlDiagnosticError) Error() string { return err.message }
+
+func (err *urlDiagnosticError) Unwrap() error { return err.cause }
+
+func (err *urlDiagnosticError) Timeout() bool {
+	cause, ok := err.cause.(interface{ Timeout() bool })
+
+	return ok && cause.Timeout()
+}
+
+func (err *urlDiagnosticError) Temporary() bool {
+	cause, ok := err.cause.(interface{ Temporary() bool })
+
+	return ok && cause.Temporary()
+}
 
 // WithLogger sets the logger for the httpClient
 func WithLogger(logger *logr.Logger) ClientOption {
 	return func(c *Client) error {
+		if logger == nil {
+			return fmt.Errorf("logger must not be nil")
+		}
 		c.logger = logger
 		return nil
 	}
@@ -81,6 +117,9 @@ func WithLogger(logger *logr.Logger) ClientOption {
 // WithCredentials sets the credentials for the httpClient
 func WithCredentials(credentials *prismgoclient.Credentials) ClientOption {
 	return func(c *Client) error {
+		if credentials == nil {
+			return fmt.Errorf("credentials must not be nil")
+		}
 		c.credentials = credentials
 		if c.credentials.Insecure {
 			transport, ok := c.httpClient.Transport.(*http.Transport)
@@ -90,10 +129,10 @@ func WithCredentials(credentials *prismgoclient.Credentials) ClientOption {
 			transport.TLSClientConfig.InsecureSkipVerify = true
 		}
 		if c.credentials.ProxyURL != "" {
-			c.logger.V(1).Info("Using proxy:", "proxy", c.credentials.ProxyURL)
+			c.logger.V(1).Info("Using configured proxy")
 			proxy, err := url.Parse(c.credentials.ProxyURL)
 			if err != nil {
-				return fmt.Errorf("error parsing proxy url: %s", err)
+				return &urlDiagnosticError{message: "error parsing proxy URL", cause: err}
 			}
 			transport, ok := c.httpClient.Transport.(*http.Transport)
 			if !ok {
@@ -125,7 +164,7 @@ func WithBaseURL(baseURL string) ClientOption {
 		}
 		u, err := url.Parse(baseURL)
 		if err != nil {
-			return err
+			return &urlDiagnosticError{message: "error parsing base URL", cause: err}
 		}
 		if u.Path == "" {
 			u.Path = "/"
@@ -138,7 +177,10 @@ func WithBaseURL(baseURL string) ClientOption {
 // WithCookies sets the cookies for the httpClient
 func WithCookies(cookies []*http.Cookie) ClientOption {
 	return func(c *Client) error {
+		c.sessionMu.Lock()
 		c.cookies = cookies
+		c.sessionVersion++
+		c.sessionMu.Unlock()
 		return nil
 	}
 }
@@ -165,8 +207,16 @@ func WithCertificate(cert *x509.Certificate) ClientOption {
 // WithRoundTripper overrides the transport for the httpClient
 // Overriding transport is useful for testing against API Mocks
 // This is not recommended for production use
+// A nil interface restores the client's private default transport.
 func WithRoundTripper(transport http.RoundTripper) ClientOption {
 	return func(c *Client) error {
+		if transport == nil {
+			c.httpClient.Transport = c.ownedTransport
+			return nil
+		}
+		if concrete, ok := transport.(*http.Transport); ok && concrete == nil {
+			return fmt.Errorf("HTTP transport must not be nil")
+		}
 		c.httpClient.Transport = transport
 		return nil
 	}
@@ -174,6 +224,17 @@ func WithRoundTripper(transport http.RoundTripper) ClientOption {
 
 // NewClient returns a wrapper around http/https (as per isHTTP flag) httpClient with additions of proxy & session_auth if given
 func NewClient(opts ...ClientOption) (*Client, error) {
+	return NewClientWithContext(context.Background(), opts...)
+}
+
+// NewClientWithContext uses ctx for constructor authentication only.
+func NewClientWithContext(ctx context.Context, opts ...ClientOption) (*Client, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context must not be nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	c := &Client{
 		httpClient: cleanhttp.DefaultClient(),
 	}
@@ -184,9 +245,15 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	}
 	c.certpool = certPool
 
-	c.httpClient.Transport = http.DefaultTransport
-	c.httpClient.Transport.(*http.Transport).TLSClientConfig = &tls.Config{}
-	c.httpClient.Transport.(*http.Transport).TLSClientConfig.RootCAs = c.certpool
+	defaultTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok || defaultTransport == nil {
+		return nil, fmt.Errorf("default transport is not a non-nil *http.Transport: %T", http.DefaultTransport)
+	}
+	// Credentials and certificate options must never mutate the shared default.
+	transport := defaultTransport.Clone()
+	transport.TLSClientConfig = &tls.Config{RootCAs: c.certpool}
+	c.httpClient.Transport = transport
+	c.ownedTransport = transport
 
 	// If the user does not specify a logger, then we'll use zap for a default one
 	// If the user specified a logger, then we'll use that logger
@@ -199,35 +266,57 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	c.logger = &logger
 
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, fmt.Errorf("client option must not be nil")
+		}
 		if err := opt(c); err != nil {
 			return nil, err
 		}
 	}
 
-	if c.UserAgent == "" {
-		return nil, fmt.Errorf("userAgent argument must be passed")
+	if err := ctx.Err(); err != nil {
+		c.CloseIdleConnections()
+		return nil, err
 	}
-	if c.absolutePath == "" {
-		return nil, fmt.Errorf("absolutePath argument must be passed")
-	}
-	if c.credentials == nil {
-		return nil, fmt.Errorf("credentials argument must be passed")
-	}
-	if c.BaseURL == nil {
-		c.logger.V(1).Info("BaseURL is not set. Using URL from credentials", "url", c.credentials.URL)
-		if err := WithBaseURL(c.credentials.URL)(c); err != nil {
-			return nil, err
-		}
+	if err := c.validateOptions(); err != nil {
+		return nil, err
 	}
 
 	if c.credentials.SessionAuth {
 		c.logger.V(1).Info("Using session_auth")
-		if err := c.refreshCookies(context.Background()); err != nil {
+		if err := c.refreshCookies(ctx); err != nil {
+			c.CloseIdleConnections()
 			return nil, err
 		}
 	}
 
 	return c, nil
+}
+
+func (c *Client) validateOptions() error {
+	if c.UserAgent == "" {
+		return fmt.Errorf("userAgent argument must be passed")
+	}
+	if c.absolutePath == "" {
+		return fmt.Errorf("absolutePath argument must be passed")
+	}
+	if c.credentials == nil {
+		return fmt.Errorf("credentials argument must be passed")
+	}
+	if c.BaseURL == nil {
+		c.logger.V(1).Info("BaseURL is not set. Using URL from credentials")
+		if err := WithBaseURL(c.credentials.URL)(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CloseIdleConnections closes only the transport allocated by this client.
+func (c *Client) CloseIdleConnections() {
+	if c.ownedTransport != nil {
+		c.ownedTransport.CloseIdleConnections()
+	}
 }
 
 func decorateRequestWithAuthHeaders(req *http.Request, c *prismgoclient.Credentials) {
@@ -251,11 +340,13 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 		return nil, err
 	}
 
+	c.sessionMu.Lock()
 	if c.cookies != nil {
 		decorateRequestWithCookies(req, c.cookies)
 	} else {
 		decorateRequestWithAuthHeaders(req, c.credentials)
 	}
+	c.sessionMu.Unlock()
 
 	return req, nil
 }
@@ -273,18 +364,21 @@ func (c *Client) refreshCookies(ctx context.Context) error {
 
 	req = req.WithContext(ctx)
 	decorateRequestWithAuthHeaders(req, c.credentials)
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doHTTPRequest(req)
 	if err != nil {
 		return err
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer func(body io.ReadCloser) { _ = body.Close() }(resp.Body)
 
 	if err := CheckResponse(resp); err != nil {
 		return err
 	}
 
+	c.sessionMu.Lock()
 	c.cookies = resp.Cookies()
+	c.sessionVersion++
+	c.sessionMu.Unlock()
 
 	return nil
 }
@@ -314,7 +408,7 @@ func (c *Client) NewUnAuthRequest(method, urlStr string, body interface{}) (*htt
 	// create main api url
 	rel, err := url.Parse(c.absolutePath + urlStr)
 	if err != nil {
-		return nil, err
+		return nil, &urlDiagnosticError{message: "error parsing request URL", cause: err}
 	}
 
 	u := c.BaseURL.ResolveReference(rel)
@@ -349,7 +443,7 @@ func (c *Client) NewUnAuthFormEncodedRequest(method, urlStr string, body map[str
 	// create main api url
 	rel, err := url.Parse(c.absolutePath + urlStr)
 	if err != nil {
-		return nil, err
+		return nil, &urlDiagnosticError{message: "error parsing request URL", cause: err}
 	}
 	u := c.BaseURL.ResolveReference(rel)
 
@@ -373,45 +467,19 @@ func (c *Client) NewUnAuthFormEncodedRequest(method, urlStr string, body map[str
 	return req, nil
 }
 
-// NewUploadRequest Handles image uploads for image service
+// NewUploadRequest authenticates an upload built by NewUnAuthUploadRequest.
 func (c *Client) NewUploadRequest(method, urlStr string, fileReader *os.File) (*http.Request, error) {
-	// check if httpClient exists or not
-	if c.httpClient == nil {
-		return nil, fmt.Errorf("%s", c.ErrorMsg)
-	}
-	rel, errp := url.Parse(c.absolutePath + urlStr)
-	if errp != nil {
-		return nil, errp
-	}
-
-	u := c.BaseURL.ResolveReference(rel)
-
-	req, err := http.NewRequest(method, u.String(), fileReader)
+	req, err := c.NewUnAuthUploadRequest(method, urlStr, fileReader)
 	if err != nil {
 		return nil, err
 	}
-
-	// Set req.ContentLength and req.GetBody as internally there is no implementation of such for os.File type reader
-	// http.NewRequest() only sets this values for types - bytes.Buffer, bytes.Reader and strings.Reader
-	// Refer https://github.com/golang/go/blob/a0f77e56b7a7ecb92dca3e2afdd56ee773c2cb07/src/net/http/request.go#L896
-	fileInfo, err := fileReader.Stat()
-	if err != nil {
-		return nil, err
-	}
-	req.ContentLength = fileInfo.Size()
-	req.GetBody = func() (io.ReadCloser, error) {
-		return io.NopCloser(fileReader), nil
-	}
-
-	req.Header.Add("Content-Type", octetStreamType)
-	req.Header.Add("Accept", mediaType)
-	req.Header.Add("User-Agent", c.UserAgent)
 	decorateRequestWithAuthHeaders(req, c.credentials)
 
 	return req, nil
 }
 
-// NewUploadRequest handles image uploads for image service
+// NewUnAuthUploadRequest reads a regular file from its current offset without owning it.
+// The caller must keep the file open and unchanged until the request and all replays finish.
 func (c *Client) NewUnAuthUploadRequest(method, urlStr string, fileReader *os.File) (*http.Request, error) {
 	// check if httpClient exists or not
 	if c.httpClient == nil {
@@ -419,27 +487,35 @@ func (c *Client) NewUnAuthUploadRequest(method, urlStr string, fileReader *os.Fi
 	}
 	rel, errp := url.Parse(c.absolutePath + urlStr)
 	if errp != nil {
-		return nil, errp
+		return nil, &urlDiagnosticError{message: "error parsing request URL", cause: errp}
 	}
 
 	u := c.BaseURL.ResolveReference(rel)
 
-	req, err := http.NewRequest(method, u.String(), fileReader)
-	if err != nil {
-		return nil, err
-	}
-
-	// Set req.ContentLength and req.GetBody as internally there is no implementation of such for os.File type reader
-	// http.NewRequest() only sets this values for types - bytes.Buffer, bytes.Reader and strings.Reader
-	// Refer https://github.com/golang/go/blob/a0f77e56b7a7ecb92dca3e2afdd56ee773c2cb07/src/net/http/request.go#L896
 	fileInfo, err := fileReader.Stat()
 	if err != nil {
 		return nil, err
 	}
-	req.ContentLength = fileInfo.Size()
-	req.GetBody = func() (io.ReadCloser, error) {
-		return io.NopCloser(fileReader), nil
+	if !fileInfo.Mode().IsRegular() {
+		return nil, fmt.Errorf("upload requires a regular file")
 	}
+	offset, err := fileReader.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return nil, err
+	}
+	size := max(int64(0), fileInfo.Size()-offset)
+	newBody := func() io.ReadCloser {
+		if size == 0 {
+			return http.NoBody
+		}
+		return io.NopCloser(io.NewSectionReader(fileReader, offset, size))
+	}
+	req, err := http.NewRequest(method, u.String(), newBody())
+	if err != nil {
+		return nil, err
+	}
+	req.ContentLength = size
+	req.GetBody = func() (io.ReadCloser, error) { return newBody(), nil }
 
 	req.Header.Add("Content-Type", octetStreamType)
 	req.Header.Add("Accept", mediaType)
@@ -452,39 +528,94 @@ func (c *Client) OnRequestCompleted(rc RequestCompletionCallback) {
 	c.onRequestCompleted = rc
 }
 
-func (c *Client) clearCookies() {
-	c.cookies = nil
+// refreshSession shares one refresh result among callers using the expired version.
+func (c *Client) refreshSession(req *http.Request, version uint64) error {
+	ctx := req.Context()
+	c.sessionMu.Lock()
+	if version != c.sessionVersion {
+		c.sessionMu.Unlock()
+		return nil
+	}
+	// Requests built before a completed refresh may still carry older cookies.
+	for _, cookie := range c.cookies {
+		if sent, err := req.Cookie(cookie.Name); err == nil && sent.Value != cookie.Value {
+			c.sessionMu.Unlock()
+			return nil
+		}
+	}
+	if refresh := c.sessionRefresh; refresh != nil {
+		c.sessionMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-refresh.done:
+			return refresh.err
+		}
+	}
+	refresh := &cookieRefresh{done: make(chan struct{})}
+	c.sessionRefresh = refresh
+	c.sessionMu.Unlock()
+
+	err := c.refreshCookies(ctx)
+	c.sessionMu.Lock()
+	refresh.err = err
+	c.sessionRefresh = nil
+	close(refresh.done)
+	c.sessionMu.Unlock()
+	return err
 }
 
-// do will perform the request and handle retries. This is a recursive function
-// that will retry the request if the response is a 401 and the client is configured
-// to use session authentication. It will retry up to maxRetries times.
-// do performs the request and handles retries. It is not exported.
-func (c *Client) do(ctx context.Context, req *http.Request, v interface{}, retryCount int, maxRetries int) error {
-	req = req.WithContext(ctx)
-	resp, err := c.httpClient.Do(req)
+// doHTTPRequest hides URL diagnostics while retaining response and body ownership.
+func (c *Client) doHTTPRequest(req *http.Request) (*http.Response, error) {
+	response, err := c.httpClient.Do(req)
+	if err != nil {
+		return response, &urlDiagnosticError{message: "error sending HTTP request", cause: err}
+	}
+
+	return response, nil
+}
+
+// send permits one explicit 401 replay; transport errors never trigger a replay.
+func (c *Client) send(req *http.Request) (*http.Response, error) {
+	var version uint64
+	if c.credentials.SessionAuth {
+		c.sessionMu.Lock()
+		version = c.sessionVersion
+		c.sessionMu.Unlock()
+	}
+	resp, err := c.doHTTPRequest(req)
+	if err != nil || !c.credentials.SessionAuth || resp.StatusCode != http.StatusUnauthorized ||
+		(req.Body != nil && req.Body != http.NoBody && req.GetBody == nil) {
+		return resp, err
+	}
+	originalBody := resp.Body
+	_ = CheckResponse(resp)
+	_ = originalBody.Close()
+	if err := c.refreshSession(req, version); err != nil {
+		return nil, err
+	}
+	if req.Body != nil && req.Body != http.NoBody {
+		req.Body, err = req.GetBody()
+		if err != nil {
+			return nil, err
+		}
+	}
+	c.sessionMu.Lock()
+	clearCookiesInRequest(req)
+	decorateRequestWithCookies(req, c.cookies)
+	c.sessionMu.Unlock()
+	return c.doHTTPRequest(req)
+}
+
+// Do performs the request with at most one session-auth replay.
+func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) error {
+	req = req.Clone(ctx)
+	resp, err := c.send(req)
 	if err != nil {
 		return err
 	}
-
-	defer func() { _ = resp.Body.Close() }()
-
+	defer func(body io.ReadCloser) { _ = body.Close() }(resp.Body)
 	if err := CheckResponse(resp); err != nil {
-		if resp.StatusCode == http.StatusUnauthorized && retryCount < maxRetries {
-			c.clearCookies()
-			if err := c.refreshCookies(ctx); err != nil {
-				return err
-			}
-			if req.Body != nil && req.GetBody != nil {
-				req.Body, err = req.GetBody()
-				if err != nil {
-					return err
-				}
-			}
-			clearCookiesInRequest(req)
-			decorateRequestWithCookies(req, c.cookies)
-			return c.do(ctx, req, v, retryCount+1, maxRetries)
-		}
 		return err
 	}
 
@@ -492,10 +623,10 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}, retry
 		if w, ok := v.(io.Writer); ok {
 			_, err = io.Copy(w, resp.Body)
 		} else {
-			err = json.NewDecoder(resp.Body).Decode(v)
+			err = decodeResponse(resp.Body, v)
 		}
 		if err != nil {
-			return fmt.Errorf("error unmarshalling json: %s", err)
+			return &prismgoclient.ResponseError{StatusCode: resp.StatusCode, Cause: err}
 		}
 	}
 
@@ -503,23 +634,6 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}, retry
 		c.onRequestCompleted(req, resp, v)
 	}
 	return nil
-}
-
-// Do performs request passed
-func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) error {
-	noRetries := 0
-	retryOnce := 1
-
-	// It's recommend that the clients use session-auth cookies instead of basic auth for requests to Prism Central
-	// where possible. Session tokens are alive for 15m and then replaced. The session-auth handling mechanism in
-	// the client should be resilient to session token refresh. As long the credentials are accurate and session
-	// auth mechanism is in play, the client upon receiving the first 401 should refresh the session cookie and
-	// retry the request. Only if the requests fails the second time, should the client return a 401 back to the caller.
-	if c.credentials.SessionAuth {
-		return c.do(ctx, req, v, noRetries, retryOnce)
-	}
-
-	return c.do(ctx, req, v, noRetries, noRetries)
 }
 
 func searchSlice(slice []string, key string) bool {
@@ -532,22 +646,23 @@ func searchSlice(slice []string, key string) bool {
 }
 
 // DoWithFilters performs request passed and filters entities in json response
-func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interface{}, filters []*prismgoclient.AdditionalFilter, baseSearchPaths []string) error {
+func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interface{}, filters []*prismgoclient.AdditionalFilter, baseSearchPaths []string) (err error) {
 	// check if httpClient exists or not
 	if c.httpClient == nil {
 		return fmt.Errorf("%s", c.ErrorMsg)
 	}
-	req = req.WithContext(ctx)
-	resp, err := c.httpClient.Do(req)
+	req = req.Clone(ctx)
+	resp, err := c.send(req)
 	if err != nil {
 		return err
 	}
 
-	defer func() {
-		if rerr := resp.Body.Close(); err == nil {
-			err = rerr
+	// Filtering and CheckResponse may replace resp.Body; retain its original owner.
+	defer func(body io.ReadCloser) {
+		if rerr := body.Close(); err == nil && rerr != nil {
+			err = &prismgoclient.ResponseError{StatusCode: resp.StatusCode, Cause: rerr}
 		}
-	}()
+	}(resp.Body)
 
 	if err := CheckResponse(resp); err != nil {
 		return err
@@ -555,21 +670,20 @@ func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interfa
 
 	resp.Body, err = filter(resp.Body, filters, baseSearchPaths)
 	if err != nil {
-		return err
+		return &prismgoclient.ResponseError{StatusCode: resp.StatusCode, Cause: err}
 	}
 
 	if v != nil {
 		if w, ok := v.(io.Writer); ok {
 			_, err = io.Copy(w, resp.Body)
-			if err != nil {
-				fmt.Printf("Error io.Copy %s", err)
-				return err
-			}
+		} else if len(filters) == 0 {
+			err = decodeResponse(resp.Body, v)
 		} else {
+			// Filtering already bounded the network body before JSON re-encoding.
 			err = json.NewDecoder(resp.Body).Decode(v)
-			if err != nil {
-				return fmt.Errorf("error unmarshalling json: %s", err)
-			}
+		}
+		if err != nil {
+			return &prismgoclient.ResponseError{StatusCode: resp.StatusCode, Cause: err}
 		}
 	}
 
@@ -581,7 +695,7 @@ func (c *Client) DoWithFilters(ctx context.Context, req *http.Request, v interfa
 }
 
 func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseSearchPaths []string) (io.ReadCloser, error) {
-	if filters == nil {
+	if len(filters) == 0 {
 		return body, nil
 	}
 	if len(baseSearchPaths) == 0 {
@@ -589,7 +703,7 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 	}
 
 	var res map[string]interface{}
-	b, err := io.ReadAll(body)
+	b, err := readResponseBody(body, maxJSONResponseBytes)
 	if err != nil {
 		return body, err
 	}
@@ -602,6 +716,9 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 	searchPaths := map[string][]string{}
 	filterMap := map[string]*prismgoclient.AdditionalFilter{}
 	for _, filter := range filters {
+		if filter == nil {
+			return nil, fmt.Errorf("additional filter must not be nil")
+		}
 		filterMap[filter.Name] = filter
 		// Build search paths by appending target search paths to base paths
 		filterSearchPaths := []string{}
@@ -615,13 +732,19 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 	// Entities that pass filters
 	var filteredEntities []interface{}
 
-	entities := res["entities"].([]interface{})
+	entities, ok := res["entities"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("filtered response entities must be an array")
+	}
 	for _, entity := range entities {
+		searchTarget, ok := entity.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("filtered response entity must be an object")
+		}
 		filtersPassed := 0
 	filter_loop:
 		for filter, filterSearchPaths := range searchPaths {
 			for _, searchPath := range filterSearchPaths {
-				searchTarget := entity.(map[string]interface{})
 				val, err := jsonpath.Get(searchPath, searchTarget)
 				if err != nil {
 					continue
@@ -650,78 +773,42 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 	return io.NopCloser(bytes.NewReader(filteredBody)), nil
 }
 
-// CheckResponse checks errors if exist errors in request
+func readResponseBody(body io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, prismgoclient.ErrResponseTooLarge
+	}
+	return data, nil
+}
+
+func decodeResponse(body io.Reader, v interface{}) error {
+	data, err := readResponseBody(body, maxJSONResponseBytes)
+	if err != nil {
+		return err
+	}
+	return json.NewDecoder(bytes.NewReader(data)).Decode(v)
+}
+
+// CheckResponse rejects non-2xx status codes without exposing server diagnostics.
 func CheckResponse(r *http.Response) error {
-	c := r.StatusCode
-
-	if c >= 200 && c <= 299 {
+	if r.StatusCode >= http.StatusOK && r.StatusCode < http.StatusMultipleChoices {
 		return nil
 	}
-
-	// Nutanix returns non-json response with code 401 when
-	// invalid credentials are used
-	if c == http.StatusUnauthorized {
-		return fmt.Errorf("invalid Nutanix credentials")
+	responseError := &prismgoclient.ResponseError{StatusCode: r.StatusCode}
+	if r.StatusCode == http.StatusUnauthorized {
+		return responseError
 	}
-
-	buf, err := io.ReadAll(r.Body)
+	buf, err := readResponseBody(r.Body, maxErrorResponseBytes)
 	if err != nil {
-		return err
+		responseError.Cause = err
+		return responseError
 	}
-
-	rdr2 := io.NopCloser(bytes.NewBuffer(buf))
-
-	r.Body = rdr2
-	// if has entities -> return nil
-	// if has message_list -> check_error["state"]
-	// if has status -> check_error["status.state"]
-	if len(buf) == 0 {
-		return nil
-	}
-
-	var res map[string]interface{}
-	err = json.Unmarshal(buf, &res)
-	if err != nil {
-		return fmt.Errorf("unmarshalling error response %s for response body %s", err, string(buf))
-	}
-
-	errRes := &ErrorResponse{}
-	if status, ok := res["status"]; ok {
-		_, sok := status.(string)
-		if sok {
-			return nil
-		}
-
-		err = fillStruct(status.(map[string]interface{}), errRes)
-	} else if _, ok := res["state"]; ok {
-		err = fillStruct(res, errRes)
-	} else if _, ok := res["entities"]; ok {
-		return nil
-	}
-
-	if err != nil {
-		return err
-	}
-
-	// konnector-server error check
-	if messageInfo, ok := res["message_info"]; ok {
-		return fmt.Errorf("error: %s", messageInfo)
-	}
-
-	// This check is also used for some foundation api errors
-	if message, ok := res["message"]; ok {
-		log.Print(message)
-		return fmt.Errorf("error: %s", message)
-	}
-	if errRes.State != "ERROR" {
-		return nil
-	}
-
-	pretty, err := json.MarshalIndent(errRes, "", "  ")
-	if err != nil {
-		return fmt.Errorf("status: %s, error-response: %+v, marshal error: %v", r.Status, errRes, err)
-	}
-	return fmt.Errorf("status: %s, error-response: %s", r.Status, string(pretty))
+	// Preserve bounded error-body replay; the caller still closes the original body.
+	r.Body = io.NopCloser(bytes.NewReader(buf))
+	return responseError
 }
 
 // ErrorResponse ...

@@ -1,6 +1,7 @@
 package konnector
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -66,11 +67,15 @@ func WithPEMEncodedCertBundle(certBundle []byte) ClientOption {
 
 // NewKonnectorAPIClient return a internal to operate Konnector resources
 func NewKonnectorAPIClient(credentials prismgoclient.Credentials, opts ...ClientOption) (*Client, error) {
+	return NewKonnectorAPIClientWithContext(context.Background(), credentials, opts...)
+}
+
+// NewKonnectorAPIClientWithContext uses ctx for constructor authentication only.
+func NewKonnectorAPIClientWithContext(ctx context.Context, credentials prismgoclient.Credentials, opts ...ClientOption) (*Client, error) {
 	if credentials.URL == "" {
 		return nil, fmt.Errorf("konnector client creation failed: " +
 			"Please provide required details - Prism Central URL in provider configuration")
 	}
-	
 
 	if credentials.APIKey == "" && (credentials.Username == "" || credentials.Password == "") {
 		return nil, fmt.Errorf("konnector client creation failed: " +
@@ -85,12 +90,15 @@ func NewKonnectorAPIClient(credentials prismgoclient.Credentials, opts ...Client
 		},
 	}
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, fmt.Errorf("client option must not be nil")
+		}
 		if err := opt(kc); err != nil {
 			return nil, err
 		}
 	}
 
-	c, err := internal.NewClient(kc.clientOpts...)
+	c, err := internal.NewClientWithContext(ctx, kc.clientOpts...)
 	if err != nil {
 		return nil, err
 	}

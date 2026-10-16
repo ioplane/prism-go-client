@@ -1,6 +1,7 @@
 package secretdir
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -9,90 +10,83 @@ import (
 
 	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/rand"
+)
+
+const (
+	fixturePortSuffix   = ":9440"
+	fixtureValueLength  = 10
+	fixtureCertLength   = 512
+	fixtureAPIKeyLength = 32
+	fixtureFileMode     = 0o600
+	fixtureDirLogFormat = "Temporary directory %s"
 )
 
 // Write regular and symlink file for given key-val pair.
 func writeParam(t *testing.T, path, key, val string) error {
-	filename := rand.String(10)
+	t.Helper()
+
+	filename := rand.String(fixtureValueLength)
 	keyPath := filepath.Join(path, key)
 	dataPath := filepath.Join(path, filename)
 
-	if err := os.WriteFile(dataPath, []byte(val), 0o600); err != nil {
+	if err := os.WriteFile(dataPath, []byte(val), fixtureFileMode); err != nil {
 		return err
 	}
-	if err := os.Symlink(filename, keyPath); err != nil {
-		return err
-	}
-	return nil
+
+	return os.Symlink(filename, keyPath)
 }
 
 func TestBasicAuth(t *testing.T) {
-	g := NewWithT(t)
-	path, err := os.MkdirTemp(".", "basic-auth")
-	g.Expect(err).To(Succeed())
-	defer func() {
-		if !t.Failed() {
-			_ = os.RemoveAll(path)
-		}
-	}()
-	t.Logf("Temporary directory %s", path)
-	_ = os.Setenv(envSecretDir, path)
-	ip := rand.String(10)
-	user := rand.String(10)
-	passwd := rand.String(10)
-	key := fmt.Sprintf("%s:9440:%s:%s", ip, user, passwd)
-	g.Expect(writeParam(t, path, secretKeyName, key)).To(Succeed())
+	matcher := gomega.NewWithT(t)
+	path := t.TempDir()
+	t.Logf(fixtureDirLogFormat, path)
+	t.Setenv(envSecretDir, path)
+
+	endpointHost := rand.String(fixtureValueLength)
+	user := rand.String(fixtureValueLength)
+	passwd := rand.String(fixtureValueLength)
+	key := fmt.Sprintf("%s:9440:%s:%s", endpointHost, user, passwd)
+	matcher.Expect(writeParam(t, path, secretKeyName, key)).To(gomega.Succeed())
 	t.Log("Key", key)
 
 	prov := &provider{}
-	me, err := prov.GetManagementEndpoint(nil)
-	g.Expect(err).To(Succeed())
-	g.Expect(me.Address.String()).To(BeIdenticalTo(fmt.Sprintf("https://%s:9440", ip)))
-	g.Expect(me.ApiCredentials.Username).To(BeIdenticalTo(user))
-	g.Expect(me.ApiCredentials.Password).To(BeIdenticalTo(passwd))
-	g.Expect(me.ApiCredentials.KeyPair).To(BeEmpty())
+	managementEndpoint, err := prov.GetManagementEndpoint(nil)
+	matcher.Expect(err).To(gomega.Succeed())
+	matcher.Expect(managementEndpoint.Address.String()).To(gomega.BeIdenticalTo("https://" + endpointHost + fixturePortSuffix))
+	matcher.Expect(managementEndpoint.ApiCredentials.Username).To(gomega.BeIdenticalTo(user))
+	matcher.Expect(managementEndpoint.ApiCredentials.Password).To(gomega.BeIdenticalTo(passwd))
+	matcher.Expect(managementEndpoint.ApiCredentials.KeyPair).To(gomega.BeEmpty())
 }
 
 func TestTLSAuth(t *testing.T) {
-	g := NewWithT(t)
-	path, err := os.MkdirTemp(".", "tls-auth")
-	g.Expect(err).To(Succeed())
-	defer func() {
-		if !t.Failed() {
-			_ = os.RemoveAll(path)
-		}
-	}()
-	ip := rand.String(10)
-	cert := rand.String(512)
-	t.Logf("Temporary directory %s", path)
-	_ = os.Setenv(envSecretDir, path)
-	g.Expect(writeParam(t, path, secretKeyCertName, cert)).To(Succeed())
-	g.Expect(writeParam(t, path, secretKeyEndpoint,
-		fmt.Sprintf("%s:9440", ip))).To(Succeed())
+	matcher := gomega.NewWithT(t)
+	path := t.TempDir()
+	endpointHost := rand.String(fixtureValueLength)
+	cert := rand.String(fixtureCertLength)
+
+	t.Logf(fixtureDirLogFormat, path)
+	t.Setenv(envSecretDir, path)
+	matcher.Expect(writeParam(t, path, secretKeyCertName, cert)).To(gomega.Succeed())
+	matcher.Expect(writeParam(t, path, secretKeyEndpoint,
+		endpointHost+fixturePortSuffix)).To(gomega.Succeed())
 
 	prov := &provider{}
-	me, err := prov.GetManagementEndpoint(nil)
-	g.Expect(err).To(Succeed())
-	g.Expect(me.Address.String()).To(BeIdenticalTo(fmt.Sprintf("https://%s:9440", ip)))
-	g.Expect(me.ApiCredentials.Username).To(BeEmpty())
-	g.Expect(me.ApiCredentials.Password).To(BeEmpty())
-	g.Expect(me.ApiCredentials.KeyPair).To(BeIdenticalTo(cert))
+	managementEndpoint, err := prov.GetManagementEndpoint(nil)
+	matcher.Expect(err).To(gomega.Succeed())
+	matcher.Expect(managementEndpoint.Address.String()).To(gomega.BeIdenticalTo("https://" + endpointHost + fixturePortSuffix))
+	matcher.Expect(managementEndpoint.ApiCredentials.Username).To(gomega.BeEmpty())
+	matcher.Expect(managementEndpoint.ApiCredentials.Password).To(gomega.BeEmpty())
+	matcher.Expect(managementEndpoint.ApiCredentials.KeyPair).To(gomega.BeIdenticalTo(cert))
 }
 
 func TestNutanixAuth(t *testing.T) {
-	g := NewWithT(t)
-	path, err := os.MkdirTemp(".", "nutanix-auth")
-	g.Expect(err).To(Succeed())
-	defer func() {
-		if !t.Failed() {
-			_ = os.RemoveAll(path)
-		}
-	}()
-	ip := rand.String(10)
-	user := rand.String(10)
-	passwd := rand.String(10)
+	matcher := gomega.NewWithT(t)
+	path := t.TempDir()
+	endpointHost := rand.String(fixtureValueLength)
+	user := rand.String(fixtureValueLength)
+	passwd := rand.String(fixtureValueLength)
 	creds := fmt.Sprintf(`
 		[
 			{
@@ -107,41 +101,34 @@ func TestNutanixAuth(t *testing.T) {
 			}
 		]
 	`, user, passwd)
-	endpoint := fmt.Sprintf("%s:9440", ip)
-	t.Logf("Temporary directory %s", path)
-	_ = os.Setenv(envSecretDir, path)
+	endpoint := endpointHost + fixturePortSuffix
+
+	t.Logf(fixtureDirLogFormat, path)
+	t.Setenv(envSecretDir, path)
 
 	// Write three keys
-	g.Expect(writeParam(t, path, secretKeyCredentials, creds)).To(Succeed())
-	g.Expect(writeParam(t, path, secretKeyInsecure, "true")).To(Succeed())
-	g.Expect(writeParam(t, path, secretKeyEndpoint, endpoint)).To(Succeed())
+	matcher.Expect(writeParam(t, path, secretKeyCredentials, creds)).To(gomega.Succeed())
+	matcher.Expect(writeParam(t, path, secretKeyInsecure, "true")).To(gomega.Succeed())
+	matcher.Expect(writeParam(t, path, secretKeyEndpoint, endpoint)).To(gomega.Succeed())
 
 	prov := &provider{}
-	me, err := prov.GetManagementEndpoint(nil)
-	g.Expect(err).To(Succeed())
-	addr, err := url.Parse(fmt.Sprintf("https://%s:9440", ip))
-	g.Expect(err).To(Succeed())
-	g.Expect(me).To(BeEquivalentTo(&types.ManagementEndpoint{
-		ApiCredentials: types.ApiCredentials{
-			Username: user,
-			Password: passwd,
-		},
+	managementEndpoint, err := prov.GetManagementEndpoint(nil)
+	matcher.Expect(err).To(gomega.Succeed())
+
+	addr := &url.URL{Scheme: "https", Host: endpointHost + fixturePortSuffix}
+	matcher.Expect(managementEndpoint).To(gomega.BeEquivalentTo(&types.ManagementEndpoint{
+		Username: user,
+		Password: passwd,
 		Insecure: true,
 		Address:  addr,
 	}))
 }
 
 func TestNutanixAPIKeyAuth(t *testing.T) {
-	g := NewWithT(t)
-	path, err := os.MkdirTemp(".", "nutanix-api-key-auth")
-	g.Expect(err).To(Succeed())
-	defer func() {
-		if !t.Failed() {
-			_ = os.RemoveAll(path)
-		}
-	}()
-	ip := rand.String(10)
-	apiKey := rand.String(32)
+	matcher := gomega.NewWithT(t)
+	path := t.TempDir()
+	endpointHost := rand.String(fixtureValueLength)
+	apiKey := rand.String(fixtureAPIKeyLength)
 	creds := fmt.Sprintf(`
 		[
 			{
@@ -154,25 +141,64 @@ func TestNutanixAPIKeyAuth(t *testing.T) {
 			}
 		]
 	`, apiKey)
-	endpoint := fmt.Sprintf("%s:9440", ip)
-	t.Logf("Temporary directory %s", path)
-	_ = os.Setenv(envSecretDir, path)
+	endpoint := endpointHost + fixturePortSuffix
+
+	t.Logf(fixtureDirLogFormat, path)
+	t.Setenv(envSecretDir, path)
 
 	// Write three keys
-	g.Expect(writeParam(t, path, secretKeyCredentials, creds)).To(Succeed())
-	g.Expect(writeParam(t, path, secretKeyInsecure, "true")).To(Succeed())
-	g.Expect(writeParam(t, path, secretKeyEndpoint, endpoint)).To(Succeed())
+	matcher.Expect(writeParam(t, path, secretKeyCredentials, creds)).To(gomega.Succeed())
+	matcher.Expect(writeParam(t, path, secretKeyInsecure, "true")).To(gomega.Succeed())
+	matcher.Expect(writeParam(t, path, secretKeyEndpoint, endpoint)).To(gomega.Succeed())
 
 	prov := &provider{}
-	me, err := prov.GetManagementEndpoint(nil)
-	g.Expect(err).To(Succeed())
-	addr, err := url.Parse(fmt.Sprintf("https://%s:9440", ip))
-	g.Expect(err).To(Succeed())
-	g.Expect(me).To(BeEquivalentTo(&types.ManagementEndpoint{
-		ApiCredentials: types.ApiCredentials{
-			APIKey: apiKey,
-		},
+	managementEndpoint, err := prov.GetManagementEndpoint(nil)
+	matcher.Expect(err).To(gomega.Succeed())
+
+	addr := &url.URL{Scheme: "https", Host: endpointHost + fixturePortSuffix}
+	matcher.Expect(managementEndpoint).To(gomega.BeEquivalentTo(&types.ManagementEndpoint{
+		APIKey:   apiKey,
 		Insecure: true,
 		Address:  addr,
 	}))
+}
+
+func TestEndpointDiagnostics(t *testing.T) {
+	const (
+		marker      = "synthetic-secretdir-url-secret-marker"
+		userinfo    = "fixture:" + marker + "@%41.invalid"
+		query       = "%41.invalid?token=" + marker
+		fixtureData = `[{"type":"api_key","data":{"prismCentral":{"apiKey":"fixture-api-key"}}}]`
+	)
+
+	tests := []struct{ name, authKey, authValue, endpoint string }{
+		{"JSON userinfo", secretKeyCredentials, fixtureData, userinfo},
+		{"JSON query", secretKeyCredentials, fixtureData, query},
+		{"TLS userinfo", secretKeyCertName, "fixture-keypair", userinfo},
+		{"TLS query", secretKeyCertName, "fixture-keypair", query},
+		{"legacy query", secretKeyName, query + ":9440:fixture-user:fixture-password", query + fixturePortSuffix},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			matcher := gomega.NewWithT(t)
+			path := t.TempDir()
+			t.Setenv(envSecretDir, path)
+			matcher.Expect(writeParam(t, path, test.authKey, test.authValue)).To(gomega.Succeed())
+
+			if test.authKey != secretKeyName {
+				matcher.Expect(writeParam(t, path, secretKeyEndpoint, test.endpoint)).To(gomega.Succeed())
+			}
+
+			endpoint, err := NewProvider().GetManagementEndpoint(nil)
+			matcher.Expect(endpoint).To(gomega.BeNil())
+			matcher.Expect(err).To(gomega.HaveOccurred())
+			matcher.Expect(err.Error()).NotTo(gomega.ContainSubstring(marker))
+
+			var cause *url.Error
+			matcher.Expect(errors.As(err, &cause)).To(gomega.BeTrue())
+			matcher.Expect(cause.URL).To(gomega.Equal("https://" + test.endpoint))
+			matcher.Expect(cause.Op).To(gomega.Equal("parse"))
+			matcher.Expect(cause.Err).To(gomega.HaveOccurred())
+		})
+	}
 }

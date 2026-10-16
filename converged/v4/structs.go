@@ -2,6 +2,8 @@ package v4
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"slices"
@@ -17,6 +19,9 @@ import (
 
 	gpuModels "github.com/nutanix/ntnx-api-golang-clients/clustermgmt-go-client/v4/models/clustermgmt/v4/ahv/config"
 	clusterModels "github.com/nutanix/ntnx-api-golang-clients/clustermgmt-go-client/v4/models/clustermgmt/v4/config"
+	dpModels "github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4/models/datapolicies/v4/config"
+	iamModels "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/models/iam/v4/authn"
+	iamAuthzModels "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/models/iam/v4/authz"
 	alertModels "github.com/nutanix/ntnx-api-golang-clients/monitoring-go-client/v4/models/monitoring/v4/serviceability"
 	multidomainModels "github.com/nutanix/ntnx-api-golang-clients/multidomain-go-client/v4/models/multidomain/v4/config"
 	subnetModels "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/networking/v4/config"
@@ -27,9 +32,6 @@ import (
 	vmmModels "github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4/models/vmm/v4/ahv/config"
 	policyModels "github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4/models/vmm/v4/ahv/policies"
 	contentModels "github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4/models/vmm/v4/content"
-	dpModels "github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4/models/datapolicies/v4/config"
-	iamModels "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/models/iam/v4/authn"
-	iamAuthzModels "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/models/iam/v4/authz"
 	volumeModels "github.com/nutanix/ntnx-api-golang-clients/volumes-go-client/v4/models/volumes/v4/config"
 )
 
@@ -171,19 +173,30 @@ func NewClientFromV4SDKClient(v4sdkClient *v4prismGoClient.Client) *Client {
 	}
 }
 
-// Operation struct async PC task operation
-// It contains the async PC task details and the results
+// Operation contains a PC task and its locally observed results.
+// Construct operations with NewOperation. Copies share synchronized state.
 type Operation[T any] struct {
-	lock               *sync.Mutex
+	state        *operationState[T]
+	taskUUID     string
+	getTask      func(context.Context) (prismModels.Task, error)
+	entityGetter func(context.Context, string) (*T, error)
+}
+
+type operationState[T any] struct {
+	lock               sync.Mutex
 	affectedEntityRefs []prismModels.EntityReference
 	entityUUIDs        []string
-	entitiesAffected   int
-	taskUUID           string
 	taskStatus         converged.TaskStatus
 	taskErrors         []error
-	client             *v4prismGoClient.Client
-	entityGetter       func(ctx context.Context, uuid string) (*T, error)
 	result             []*T
+	run                *operationRun[T]
+	finished           bool
+}
+
+type operationRun[T any] struct {
+	done   chan struct{}
+	result []*T
+	err    error
 }
 
 // NewOperation creates a new Operation for the given PC async task UUID and client.
@@ -192,213 +205,226 @@ func NewOperation[T any](
 	client *v4prismGoClient.Client,
 	entityGetter func(ctx context.Context, uuid string) (*T, error)) *Operation[T] {
 	return &Operation[T]{
-		lock:         &sync.Mutex{},
-		entityUUIDs:  make([]string, 0),
-		taskUUID:     taskUUID,
-		taskStatus:   converged.TaskStatusQueued,
-		taskErrors:   make([]error, 0),
-		client:       client,
+		state:    &operationState[T]{taskStatus: converged.TaskStatusQueued, taskErrors: make([]error, 0)},
+		taskUUID: taskUUID,
+		getTask: func(ctx context.Context) (prismModels.Task, error) {
+			if client == nil || client.TasksApiInstance == nil || client.TasksApiInstance.ServiceClient == nil {
+				return prismModels.Task{}, errors.New("task client is not initialized")
+			}
+			return CallAPI[*prismModels.GetTaskApiResponse, prismModels.Task](
+				client.TasksApiInstance.ServiceClient.GetTaskById(ctx, &taskRequest.GetTaskByIdRequest{ExtId: &taskUUID}),
+			)
+		},
 		entityGetter: entityGetter,
 	}
 }
 
-// Wait waits for the PC async task to complete and returns the entities affected.
+// Wait shares one poller and result fetch among concurrent callers. A waiting
+// caller can cancel independently; the poller's context controls its own attempt.
+// Local cancellation never cancels or deletes the remote task or its entities.
+// Terminal outcomes are reused. An interrupted attempt can be resumed by Wait.
 func (o *Operation[T]) Wait(ctx context.Context) ([]*T, error) {
-	var result []*T
-
-	var task prismModels.Task
-	var err error
-
-	taskStatusValue := prismModels.TASKSTATUS_UNKNOWN
-	taskStatus := &taskStatusValue
-
-	for *taskStatus != prismModels.TASKSTATUS_SUCCEEDED {
+	if o.state == nil || o.getTask == nil {
+		return nil, errors.New("operation is not initialized")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("task wait canceled: %w", err)
+	}
+	o.state.lock.Lock()
+	if o.state.finished {
+		run := o.state.run
+		o.state.lock.Unlock()
+		return slices.Clone(run.result), run.err
+	}
+	if o.state.run != nil {
+		run := o.state.run
+		o.state.lock.Unlock()
 		select {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("task wait canceled: %w", ctx.Err())
-		default:
-			// Wait for the task to complete
-			time.Sleep(1 * time.Second)
-
-			task, err = CallAPI[*prismModels.GetTaskApiResponse, prismModels.Task](
-				o.client.TasksApiInstance.ServiceClient.GetTaskById(ctx,
-					&taskRequest.GetTaskByIdRequest{
-						ExtId: &o.taskUUID,
-					},
-				),
-			)
-
-			if err != nil {
-				return nil, fmt.Errorf("failed to get task %s: %w", o.taskUUID, err)
-			}
-
-			taskStatus = task.Status
-			if taskStatus == nil {
-				return nil, fmt.Errorf("task %s status is nil", o.taskUUID)
-			}
-
-			o.setTaskStatus(ConvertTaskStatus(*taskStatus))
-
-			if *taskStatus == prismModels.TASKSTATUS_FAILED {
-				errMessages := ""
-				if task.ErrorMessages != nil {
-					for _, msg := range task.ErrorMessages {
-						errMessages += fmt.Sprintf("%s; ", *msg.Message)
-					}
-
-					for _, msg := range task.ErrorMessages {
-						o.appendTaskError(fmt.Errorf("task %s error: %s", o.taskUUID, *msg.Message))
-					}
-
-					return nil, fmt.Errorf("task %s failed: %s", o.taskUUID, errMessages)
-				}
-
-				if *taskStatus == prismModels.TASKSTATUS_CANCELED || *taskStatus == prismModels.TASKSTATUS_CANCELING {
-					return nil, fmt.Errorf("task %s was canceled", o.taskUUID)
-				}
-			}
-		}
-
-		if task.EntitiesAffected != nil {
-			o.setEntitiesAffected(len(task.EntitiesAffected))
-			o.setAffectedEntityRefs(task.EntitiesAffected)
-		}
-
-		for _, entityRef := range task.EntitiesAffected {
-			if entityRef.ExtId == nil {
-				return nil, fmt.Errorf("task %s affected entity reference is nil or has no UUID", o.taskUUID)
-			}
-
-			// TODO: Get rid of this check when we will be sure that the correct amount of entities is returned (see comment below)
-			// STATE: 2025-09-23 - Ilya Alekseyev - On VM creation sometimes returns duplicates.
-			if slices.Contains(o.entityUUIDs, *entityRef.ExtId) {
-				continue
-			}
-
-			o.appendEntityUUID(*entityRef.ExtId)
+		case <-run.done:
+			return slices.Clone(run.result), run.err
 		}
 	}
+	run := &operationRun[T]{done: make(chan struct{})}
+	o.state.run = run
+	o.state.lock.Unlock()
 
-	for _, uuid := range o.entityUUIDs {
+	run.result, run.err = o.wait(ctx)
+	o.state.lock.Lock()
+	// Retry local interruption and lookup failures, but never refetch a completed outcome.
+	o.state.finished = run.err == nil || o.state.taskStatus == converged.TaskStatusFailed || o.state.taskStatus == converged.TaskStatusCanceled ||
+		(o.state.taskStatus == converged.TaskStatusSucceeded && !errors.Is(run.err, context.Canceled) && !errors.Is(run.err, context.DeadlineExceeded))
+	if !o.state.finished {
+		o.state.run = nil
+	}
+	close(run.done)
+	o.state.lock.Unlock()
+	return slices.Clone(run.result), run.err
+}
+
+func (o *Operation[T]) wait(ctx context.Context) ([]*T, error) {
+	for o.Status() != converged.TaskStatusSucceeded {
+		timer := time.NewTimer(time.Second)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, fmt.Errorf("task wait canceled: %w", ctx.Err())
+		case <-timer.C:
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("task wait canceled: %w", err)
+		}
+		task, err := o.getTask(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get task %s: %w", o.taskUUID, err)
+		}
+		if task.Status == nil {
+			return nil, fmt.Errorf("task %s status is nil", o.taskUUID)
+		}
+		o.state.lock.Lock()
+		o.state.taskStatus = ConvertTaskStatus(*task.Status)
+		switch *task.Status {
+		case prismModels.TASKSTATUS_FAILED, prismModels.TASKSTATUS_CANCELED:
+			for _, msg := range task.ErrorMessages {
+				if msg.Message != nil {
+					o.state.taskErrors = append(o.state.taskErrors, fmt.Errorf("task %s error: %s", o.taskUUID, *msg.Message))
+				}
+			}
+			err := fmt.Errorf("task %s status %s: %w", o.taskUUID, o.state.taskStatus, converged.ErrTaskFailed)
+			if len(o.state.taskErrors) == 0 {
+				o.state.taskErrors = append(o.state.taskErrors, err)
+			} else {
+				err = errors.Join(err, errors.Join(o.state.taskErrors...))
+			}
+			o.state.lock.Unlock()
+			return nil, err
+		}
+		if task.EntitiesAffected != nil {
+			o.state.affectedEntityRefs = slices.Clone(task.EntitiesAffected)
+		}
+		for _, ref := range task.EntitiesAffected {
+			if ref.ExtId == nil {
+				o.state.lock.Unlock()
+				return nil, fmt.Errorf("task %s affected entity reference is nil or has no UUID", o.taskUUID)
+			}
+			// Duplicate references have been observed in VM creation responses.
+			if !slices.Contains(o.state.entityUUIDs, *ref.ExtId) {
+				o.state.entityUUIDs = append(o.state.entityUUIDs, *ref.ExtId)
+			}
+		}
+		o.state.lock.Unlock()
+	}
+
+	result := make([]*T, 0)
+	for _, uuid := range o.state.entityUUIDs {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("task wait canceled: %w", err)
+		}
+		if o.entityGetter == nil {
+			return nil, errors.New("entity getter is not initialized")
+		}
 		entity, err := o.entityGetter(ctx, uuid)
-		// TODO: Uncomment this when we will be sure that the correct amount of entities is returned
-		// STATE: 2025-07-29 - Ilya Alekseyev - On VM creation sometimes returns multiple entities some of those can not be found.
-		// if entity == nil {
-		// 	return nil, fmt.Errorf("entity %s not found", uuid)
-		// }
-
-		// TODO: Get rid of this check when we will be sure that the correct amount of entities is returned (see comment above)
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("task wait canceled: %w", ctx.Err())
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("failed to get entity %s: %w", uuid, err)
+		}
+		// Some VM tasks include unrelated, missing entities; delete getters return nil, nil.
 		if entity != nil {
 			if err != nil {
 				return nil, fmt.Errorf("failed to get entity %s: %w", uuid, err)
 			}
-
 			result = append(result, entity)
 		}
 	}
-
-	// Set results
-	o.setResults(result)
-
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("task wait canceled: %w", err)
+	}
+	o.state.lock.Lock()
+	o.state.result = result
+	o.state.lock.Unlock()
 	return result, nil
 }
 
-// Results returns the results of the PC async task operation.
+// Results returns a separate result slice. Entity pointers remain caller-owned
+// and must not be mutated concurrently with other readers.
 func (o *Operation[T]) Results() ([]*T, error) {
-	if o.taskStatus == converged.TaskStatusFailed || o.taskStatus == converged.TaskStatusCanceled || o.taskStatus == converged.TaskStatusCanceling {
-		return nil, converged.ErrTaskFailed
-	}
-
-	if o.taskStatus != converged.TaskStatusSucceeded {
+	if o.state == nil {
 		return nil, converged.ErrTaskNotComplete
 	}
-
-	if o.result == nil {
+	o.state.lock.Lock()
+	defer o.state.lock.Unlock()
+	if o.state.taskStatus == converged.TaskStatusFailed || o.state.taskStatus == converged.TaskStatusCanceled {
+		return nil, converged.ErrTaskFailed
+	}
+	if o.state.taskStatus != converged.TaskStatusSucceeded {
+		return nil, converged.ErrTaskNotComplete
+	}
+	if o.state.result == nil {
 		return nil, converged.ErrTaskResultsNotReady
 	}
-
-	return o.result, nil
+	return slices.Clone(o.state.result), nil
 }
 
 // UUID returns the UUID of the PC async task.
-func (o *Operation[T]) UUID() string {
-	return o.taskUUID
-}
+func (o *Operation[T]) UUID() string { return o.taskUUID }
 
-// Status returns the status of the PC async task.
+// Status returns the last observed status of the PC async task.
 func (o *Operation[T]) Status() converged.TaskStatus {
-	return o.taskStatus
-}
-
-// Errors returns the errors of the PC async task.
-func (o *Operation[T]) Errors() []error {
-	return o.taskErrors
-}
-
-func (o *Operation[T]) setTaskStatus(status converged.TaskStatus) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-	o.taskStatus = status
-}
-
-func (o *Operation[T]) setAffectedEntityRefs(entityRefs []prismModels.EntityReference) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-	o.affectedEntityRefs = slices.Clone(entityRefs)
-}
-
-func (o *Operation[T]) GetAffectedEntityRefs() ([]any, error) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-	entityRefs := make([]any, len(o.affectedEntityRefs))
-	for i, entityRef := range o.affectedEntityRefs {
-		entityRefs[i] = &entityRef
+	if o.state == nil {
+		return ""
 	}
-	return entityRefs, nil
+	o.state.lock.Lock()
+	defer o.state.lock.Unlock()
+	return o.state.taskStatus
 }
 
-func (o *Operation[T]) setEntitiesAffected(count int) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-	o.entitiesAffected = count
+// Errors returns a separate slice of observed task errors.
+func (o *Operation[T]) Errors() []error {
+	if o.state == nil {
+		return nil
+	}
+	o.state.lock.Lock()
+	defer o.state.lock.Unlock()
+	return slices.Clone(o.state.taskErrors)
 }
 
-func (o *Operation[T]) appendTaskError(err error) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-
-	o.taskErrors = append(o.taskErrors, err)
+// GetAffectedEntityRefs returns independent copies of generated references,
+// including their pointer fields and JSON extension metadata.
+func (o *Operation[T]) GetAffectedEntityRefs() ([]any, error) {
+	if o.state == nil {
+		return []any{}, nil
+	}
+	o.state.lock.Lock()
+	defer o.state.lock.Unlock()
+	data, err := json.Marshal(o.state.affectedEntityRefs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy affected entity references: %w", err)
+	}
+	var refs []prismModels.EntityReference
+	if err := json.Unmarshal(data, &refs); err != nil {
+		return nil, fmt.Errorf("failed to copy affected entity references: %w", err)
+	}
+	result := make([]any, len(refs))
+	for i := range refs {
+		result[i] = &refs[i]
+	}
+	return result, nil
 }
 
-func (o *Operation[T]) appendEntityUUID(uuid string) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-	o.entityUUIDs = append(o.entityUUIDs, uuid)
-}
-
-func (o *Operation[T]) setResults(results []*T) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-	o.result = results
-}
-
-// IsDone checks if the PC async task is finished.
+// IsDone checks whether the remote task has reached a terminal state.
 func (o *Operation[T]) IsDone() bool {
-	return o.taskStatus == converged.TaskStatusSucceeded ||
-		o.taskStatus == converged.TaskStatusFailed ||
-		o.taskStatus == converged.TaskStatusCanceled ||
-		o.taskStatus == converged.TaskStatusCanceling
+	status := o.Status()
+	return status == converged.TaskStatusSucceeded || status == converged.TaskStatusFailed || status == converged.TaskStatusCanceled
 }
 
 // IsSuccess checks if the PC async task is successful.
-func (o *Operation[T]) IsSuccess() bool {
-	return o.taskStatus == converged.TaskStatusSucceeded
-}
+func (o *Operation[T]) IsSuccess() bool { return o.Status() == converged.TaskStatusSucceeded }
 
 // IsFailed checks if the PC async task is failed.
-func (o *Operation[T]) IsFailed() bool {
-	return o.taskStatus == converged.TaskStatusFailed
-}
+func (o *Operation[T]) IsFailed() bool { return o.Status() == converged.TaskStatusFailed }
 
 // NewIterator creates a new iterator for the given list function and options.
 func NewIterator[R APIResponse, T any](

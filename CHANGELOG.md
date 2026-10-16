@@ -1,8 +1,86 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Fixed
+
+- Kubernetes environment providers reject a missing credential reference with a configuration error before accessing informers, instead of panicking or falling back to another provider. Valid references and original Secret lookup errors are preserved.
+
+- Environment lookups continue to the next provider for wrapped ErrNotFound errors and return the canonical missing-key error after exhaustion. Hard errors and successful nil values still stop lookup, preserving provider order and original hard-error identity.
+
+- A nil RoundTripper option restores the client's private default transport, preserving its TLS/proxy settings instead of falling back to the process-global transport. A typed-nil *http.Transport returns an explicit constructor error; external RoundTripper implementations with working nil receivers remain supported.
+
+- Nil credentials, client options and loggers return constructor errors instead of panicking across shared, v3, v4 and Konnector entrypoints.
+
+- Nusights retry documentation matches the existing 10-second minimum and 300-second maximum waits. Secretdir tests use isolated temporary directories and restore environment variables, allowing read-only source mounts.
+
+- V4 error classification tolerates absent Status or Body fields promoted through nil embedded pointers while preserving the original error cause and classification from available fields.
+
+- Invalid v4 ETag and list metadata shapes, including nil embedded pointers to promoted fields, return their documented empty values without reflection panics; ETag copies populate the destination without mutating shared source metadata.
+
+- V3 ListAll pagination retains the first page, advances by raw response metadata, and stops at the reported total without repeated first-page or extra empty requests. Subnet client-side filters apply to every page. Missing or inconsistent pagination metadata and entity counts return an error instead of a partial inventory or panic; host listing retains its historical single-request contract.
+
+- V4 Operation.Wait interrupts poll timers on local cancellation, terminates FAILED tasks without messages and CANCELED tasks, and keeps CANCELING pending. Missing error messages no longer panic; returned errors preserve Prism task diagnostics for synchronous callers and retain errors.Is(ErrTaskFailed).
+- Concurrent v4 Wait callers share one poller and entity fetch; completed outcomes are stable without extra requests. Result/error slices and affected references are isolated from caller mutation, including successful operations with no returned entities. Local cancellation never cancels or deletes remote tasks or VMs.
+
+- V3 and v4 client caches coalesce concurrent creation per key, share constructor errors, retain the previous client when replacement fails, and prevent an in-flight constructor from republishing after Delete. Functional options use the first successful publication until endpoint change or Delete.
+- V3 cache retirement and failed shared constructor authentication close only SDK-owned idle transports; caller-supplied transports remain caller-owned. Trust bundle options no longer modify the caller's slice backing array.
+- V4 client option errors preserve their cause through errors.Is/errors.As.
+
+- Session cookies are synchronized and concurrent explicit 401 responses share one refresh per expired session version. Filtered requests use the same single-replay path; non-replayable bodies and transport errors never trigger a retry. Waiting callers can cancel independently. Initial unauthenticated request headers are preserved; session cookies are replaced only after an explicit 401.
+
+- File uploads use independent replay readers over the caller-owned regular file, with Content-Length matching the remaining range. Closing an HTTP body no longer closes or advances the source file; non-regular sources are rejected before sending.
+
+- Nil additional filters and malformed entities now return errors instead of panicking; valid filtering and original response-body ownership are preserved.
+- The independent nusights module uses patched MongoDB v1.17.10; its module-level vulnerability scan is blocking, including vulnerabilities outside imported packages.
+- Standalone SDK dependency advisories are resolved by compatible updates to x/net, AWS S3/eventstream, MongoDB v1 and OAuth2; whole-SDK scanning remains blocking.
+- JSON decode errors retain their cause for errors.Is/errors.As in both request paths.
+- HTTP non-2xx responses always return an error; filtered responses close the original body exactly once and malformed JSON returns an error without panic.
+- Каждый HTTP client получает отдельный clone transport и TLS configuration; создание клиентов больше не изменяет общий `http.DefaultTransport`, его proxy и TLS verification. Неподдерживаемый или nil default transport возвращает ошибку вместо panic.
+
+### Changed
+
+- Fork pull request titles and descriptions and new commit messages use English; commit titles retain declarative Conventional Commits.
+
+- Response diagnostics no longer echo server messages, body fields or arbitrary HTTP status text. Consumers must use `errors.As` with `ResponseError.StatusCode` and `errors.Is` with the unwrapped cause instead of matching server message strings.
+- Decoded and filtered network JSON bodies have a 64 MiB SDK limit; error bodies have a 64 KiB limit. Oversized responses return `ErrResponseTooLarge`; unfiltered `io.Writer` responses remain streaming. Large inventories must use pagination.
+
+- New commit titles use English declarative noun phrases; owner-authorized message-only history rewrites preserve source trees and backup references.
+- The nusights module now also requires Go 1.27.0 with the pinned Go 1.27.2 toolchain. Consumers of that independent module must upgrade their compiler.
+- The fork requires Go 1.27.0 and pins the Go 1.27.2 development toolchain.
+
+### Security
+
+- Request-path parse errors and HTTP client transport errors now use constant diagnostics instead of echoing URLs and query values. Migration: replace direct `*url.Error` assertions with `errors.As`; `errors.Is`, direct `net.Error` timeout/temporary classification and `os.IsTimeout` remain supported. Retained URLs and unwrapped causes may contain credentials and must not be logged.
+
+- Secret-directory environment endpoint parse errors now use constant diagnostics instead of echoing endpoint contents, including userinfo and query values. Migration: use `errors.As` with `*url.Error` instead of matching raw parser text; the retained `URL` and unwrapped cause may contain credentials and must not be logged.
+
+- Local and Kubernetes environment endpoint parse errors now use constant diagnostic text and retain the original *url.Error cause. Consumers must replace diagnostic string matching with errors.As; unwrapped URLs/errors may contain credentials or tokens and must not be logged. Valid URL parsing, default ports and credential lookup are unchanged.
+
+- V4 endpoint parse-error text is now constant and constructor initialization errors preserve their original cause. Consumers must replace diagnostic string matching with errors.As for *url.Error or *strconv.NumError, or errors.Is for the underlying cause; unwrapped endpoint/port diagnostics may contain credentials or tokens and must not be logged. Valid endpoint parsing and the default port are unchanged.
+
+- API base-URL configuration logs omit the raw URL and base-URL parse-error text is now constant. Consumers must use errors.As with *url.Error instead of diagnostic string matching; the unwrapped URL/cause may contain credentials or tokens and must not be logged. Valid URL parsing and the original parse cause are preserved.
+
+- Proxy configuration logs omit the raw URL and proxy parse-error text is now constant. Consumers matching diagnostic strings must use errors.As with *url.Error instead; the unwrapped cause may contain credentials and must not be logged.
+
+- API response, decode, copy and close errors use safe diagnostics while retaining causes for programmatic inspection. Non-2xx body parsing and implicit server-message logging are removed.
+
+### Added
+
+- Context-aware v3/Konnector constructors and v3/v4 cache entrypoints support cancellation of constructor authentication and independent waiters. Existing entrypoints retain their Background behavior; no new default deadline or generated-v4 transport policy is introduced.
+
+- Reproducible offline performance baselines with fixture assertions and repeated allocation/latency samples; benchmark smoke checks run under the race detector. No production workload or performance tuning is performed.
+
+- The modernization plan distinguishes fixed syntax-invalid JSON from still-open schema-invalid response guards and session/upload/task lifecycle work.
+
+- Fork contribution governance checks new commit and PR titles plus Keep a Changelog structure in Podman; inherited SDK release headings are explicitly baselined.
+- The modernization plan orders correctness, recovery, package structure, measured optimization and Rancher adoption through Beads dependencies.
+- Blocking complete-SDK vulnerability and module consistency checks; external Keploy fixtures remain explicitly separated from unit coverage.
+- Изолированные Podman regression, unit и race checks для fork; существующие тесты с внешним Keploy server перечислены отдельно от unit gate.
 
 ## [v0.6.1]
 ### Added

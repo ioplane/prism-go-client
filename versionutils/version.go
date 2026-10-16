@@ -59,6 +59,11 @@ import (
 // it sort above any realistic release.
 const unparsableOrdinal = 9999
 
+const (
+	versionSeparator    = "."
+	osPrefixMatchFields = 2
+)
+
 // masterVersion is the version reported by development builds that are not
 // built from a release branch.
 const masterVersion = "master"
@@ -111,15 +116,16 @@ func Parse(version string) Version {
 	// prefix on would let a "v7.6" Prism Central satisfy a 9.9 minimum.
 	normalized = strings.TrimPrefix(normalized, "v")
 
-	v := Version{normalized: normalized}
+	parsed := Version{normalized: normalized, parts: nil}
 	if normalized == masterVersion {
-		v.parts = []int{unparsableOrdinal}
-		return v
+		parsed.parts = []int{unparsableOrdinal}
+
+		return parsed
 	}
 
-	v.parts = toIntList(normalized)
-	if !isUnparsableParts(v.parts) {
-		return v
+	parsed.parts = toIntList(normalized)
+	if !isUnparsableParts(parsed.parts) {
+		return parsed
 	}
 
 	// Prism fullVersion is not dotted integers. Extract the AOS token
@@ -131,7 +137,8 @@ func Parse(version string) Version {
 			return Parse(extracted)
 		}
 	}
-	return v
+
+	return parsed
 }
 
 // ParseReported combines Prism's truncated short version with fullVersion.
@@ -148,6 +155,7 @@ func ParseReported(short, full string) Version {
 // (for example "8.5" from "el8.5-...") are ignored.
 func reportedVersion(short, full string) string {
 	short = strings.TrimSpace(short)
+
 	full = strings.TrimSpace(full)
 	if full == "" {
 		return short
@@ -157,22 +165,28 @@ func reportedVersion(short, full string) string {
 	for _, candidate := range aosTokensFromFull(full) {
 		if short == "" {
 			best = candidate
+
 			continue
 		}
+
 		if !versionRefines(short, candidate) {
 			continue
 		}
+
 		cand := Parse(candidate)
+
 		bestVer := Parse(best)
 		switch cand.compare(bestVer) {
 		case 1:
 			best = candidate
 		case 0:
-			if strings.Count(candidate, ".") > strings.Count(best, ".") {
+			if strings.Count(candidate, versionSeparator) > strings.Count(best, versionSeparator) {
 				best = candidate
 			}
+		default:
 		}
 	}
+
 	return best
 }
 
@@ -183,38 +197,47 @@ func aosTokensFromFull(full string) []string {
 	if len(tokens) == 0 {
 		return nil
 	}
+
 	osVer := ""
-	if m := osPrefixRe.FindStringSubmatch(full); len(m) == 2 {
+	if m := osPrefixRe.FindStringSubmatch(full); len(m) == osPrefixMatchFields {
 		osVer = m[1]
 	}
+
 	out := make([]string, 0, len(tokens))
+
 	skippedOS := false
 	for _, token := range tokens {
 		if !skippedOS && osVer != "" && token == osVer {
 			skippedOS = true
+
 			continue
 		}
+
 		out = append(out, token)
 	}
+
 	return out
 }
 
 // versionRefines reports whether candidate is the same version as base or a
 // more specific patch of it ("7.5.1" refines "7.5"; "8.5" does not).
 func versionRefines(base, candidate string) bool {
-	baseParts, ok := dottedIntParts(base)
-	if !ok {
+	baseParts, valid := dottedIntParts(base)
+	if !valid {
 		return false
 	}
-	candidateParts, ok := dottedIntParts(candidate)
-	if !ok || len(candidateParts) < len(baseParts) {
+
+	candidateParts, valid := dottedIntParts(candidate)
+	if !valid || len(candidateParts) < len(baseParts) {
 		return false
 	}
+
 	for i, part := range baseParts {
 		if candidateParts[i] != part {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -222,15 +245,19 @@ func dottedIntParts(version string) ([]int, bool) {
 	if version == "" {
 		return nil, false
 	}
-	raw := strings.Split(version, ".")
+
+	raw := strings.Split(version, versionSeparator)
+
 	parts := make([]int, 0, len(raw))
 	for _, component := range raw {
 		n, err := strconv.Atoi(component)
 		if err != nil {
 			return nil, false
 		}
+
 		parts = append(parts, n)
 	}
+
 	return parts, true
 }
 
@@ -246,16 +273,31 @@ func looksLikeFullVersion(s string) bool {
 // component is not an integer, or the input is empty, it returns
 // [unparsableOrdinal] so the version sorts as the newest.
 func toIntList(str string) []int {
-	parts := strings.Split(str, ".")
+	parts := strings.Split(str, versionSeparator)
+
 	ints := make([]int, 0, len(parts))
 	for _, part := range parts {
 		val, err := strconv.Atoi(part)
 		if err != nil {
 			return []int{unparsableOrdinal}
 		}
+
 		ints = append(ints, val)
 	}
+
 	return ints
+}
+
+// AtLeast reports whether v is newer than or equal to minVersion. An
+// unparsable version, including an empty one, reports true.
+func (v Version) AtLeast(minVersion Version) bool {
+	return v.compare(minVersion) >= 0
+}
+
+// String returns the normalized version: trimmed, lower-cased and without any
+// "pc." prefix.
+func (v Version) String() string {
+	return v.normalized
 }
 
 // compare returns 0 if v and other are equal, 1 if v is newer, and -1 if v is
@@ -271,6 +313,7 @@ func (v Version) compare(other Version) int {
 	if is7X(v.normalized) && is202X(other.normalized) {
 		return 1
 	}
+
 	if is7X(other.normalized) && is202X(v.normalized) {
 		return -1
 	}
@@ -279,6 +322,7 @@ func (v Version) compare(other Version) int {
 
 	vParts := make([]int, maxLen)
 	otherParts := make([]int, maxLen)
+
 	copy(vParts, v.parts)
 	copy(otherParts, other.parts)
 
@@ -290,19 +334,8 @@ func (v Version) compare(other Version) int {
 			return -1
 		}
 	}
+
 	return 0
-}
-
-// AtLeast reports whether v is newer than or equal to minVersion. An
-// unparsable version, including an empty one, reports true.
-func (v Version) AtLeast(minVersion Version) bool {
-	return v.compare(minVersion) >= 0
-}
-
-// String returns the normalized version: trimmed, lower-cased and without any
-// "pc." prefix.
-func (v Version) String() string {
-	return v.normalized
 }
 
 // is202X reports whether a normalized version is calendar-versioned.

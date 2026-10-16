@@ -1,3 +1,4 @@
+// Package client provides Nutanix Insights clients and retry configuration.
 package client
 
 import (
@@ -28,17 +29,19 @@ type RetryConfig struct {
 	CheckRetry retryablehttp.CheckRetry
 
 	// Backoff specifies the policy for how long to wait between retries.
-	// If nil, exponential backoff with jitter is used.
+	// If nil, exponential backoff is used.
 	Backoff retryablehttp.Backoff
 }
 
 // DefaultRetryConfig returns a RetryConfig with sensible defaults:
-// 4 retries, 1s min wait, 30s max wait, exponential backoff with jitter.
+// 4 retries, 10s min wait, 300s max wait, exponential backoff.
 func DefaultRetryConfig() *RetryConfig {
 	return &RetryConfig{
 		RetryMax:     defaultRetryMax,
 		RetryWaitMin: defaultRetryWaitMin,
 		RetryWaitMax: defaultRetryWaitMax,
+		CheckRetry:   nil,
+		Backoff:      nil,
 	}
 }
 
@@ -51,25 +54,26 @@ func ApplyRetryToTransport(transport *httptransport.Runtime, cfg *RetryConfig) {
 		cfg = DefaultRetryConfig()
 	}
 
-	rc := retryablehttp.NewClient()
-	rc.RetryMax = cfg.RetryMax
-	rc.RetryWaitMin = cfg.RetryWaitMin
-	rc.RetryWaitMax = cfg.RetryWaitMax
-	rc.Logger = nil // silence default logger; callers can set their own
+	retryClient := retryablehttp.NewClient()
+	retryClient.RetryMax = cfg.RetryMax
+	retryClient.RetryWaitMin = cfg.RetryWaitMin
+	retryClient.RetryWaitMax = cfg.RetryWaitMax
+	retryClient.Logger = nil // silence default logger; callers can set their own
 
 	if cfg.CheckRetry != nil {
-		rc.CheckRetry = cfg.CheckRetry
+		retryClient.CheckRetry = cfg.CheckRetry
 	}
+
 	if cfg.Backoff != nil {
-		rc.Backoff = cfg.Backoff
+		retryClient.Backoff = cfg.Backoff
 	}
 
 	// Preserve the existing base RoundTripper (e.g. TLS config) if one is set.
 	if transport.Transport != nil {
-		rc.HTTPClient.Transport = transport.Transport
+		retryClient.HTTPClient.Transport = transport.Transport
 	}
 
-	transport.Transport = &retryablehttp.RoundTripper{Client: rc}
+	transport.Transport = &retryablehttp.RoundTripper{Client: retryClient}
 }
 
 // NewHTTPClientWithRetry creates a NutanixInsightsRESTAPIs client with
@@ -82,6 +86,7 @@ func NewHTTPClientWithRetry(formats strfmt.Registry, cfg *TransportConfig, retry
 
 	transport := httptransport.New(cfg.Host, cfg.BasePath, cfg.Schemes)
 	ApplyRetryToTransport(transport, retryCfg)
+
 	return New(transport, formats)
 }
 
@@ -92,6 +97,7 @@ func NewConfigClientWithBasicAuthAndRetry(host, basePath, scheme, user, password
 	transport := httptransport.New(host, basePath, []string{scheme})
 	transport.DefaultAuthentication = httptransport.BasicAuth(user, password)
 	ApplyRetryToTransport(transport, retryCfg)
+
 	return config.New(transport, strfmt.Default)
 }
 
@@ -102,5 +108,6 @@ func NewConfigClientWithBearerTokenAndRetry(host, basePath, scheme, bearerToken 
 	transport := httptransport.New(host, basePath, []string{scheme})
 	transport.DefaultAuthentication = httptransport.BearerToken(bearerToken)
 	ApplyRetryToTransport(transport, retryCfg)
+
 	return config.New(transport, strfmt.Default)
 }

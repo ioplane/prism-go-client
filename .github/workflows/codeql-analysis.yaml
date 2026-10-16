@@ -27,6 +27,7 @@ on:
 # an ephemeral sandbox rather than on self-hosted infrastructure.
 jobs:
   CodeQL-Build:
+    if: ${{ github.repository == 'nutanix-cloud-native/prism-go-client' }}
     runs-on: ubuntu-latest
 
     permissions:
