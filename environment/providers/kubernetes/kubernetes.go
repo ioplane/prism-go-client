@@ -1,12 +1,11 @@
-/*
- Kubernetes environment reads settings by accessing Kubernetes APIs.
-*/
-
+// Package kubernetes reads environment settings from informer caches.
 package kubernetes
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 
 	"github.com/nutanix-cloud-native/prism-go-client/environment/credentials"
 	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
@@ -23,31 +22,83 @@ const (
 	certBundleKey = "ca.crt"
 )
 
+type endpointParseError struct {
+	cause error
+}
+
+func (*endpointParseError) Error() string { return "error parsing Kubernetes environment endpoint" }
+
+func (err *endpointParseError) Unwrap() error { return err.cause }
+
+// GetManagementEndpoint retrieves management endpoint.
+func (prov *provider) GetManagementEndpoint(
+	topology types.Topology,
+) (*types.ManagementEndpoint, error) {
+	creds, err := prov.getCredentials(topology)
+	if err != nil {
+		return nil, err
+	}
+
+	addr, err := url.Parse("https://" + prov.prismEndpoint.Address + ":" + strconv.Itoa(int(prov.prismEndpoint.Port)))
+	if err != nil {
+		return nil, &endpointParseError{cause: err}
+	}
+
+	trustBundle, err := prov.getAdditionalTrustBundle()
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.ManagementEndpoint{
+		Address:               addr,
+		Insecure:              prov.prismEndpoint.Insecure,
+		AdditionalTrustBundle: trustBundle,
+		ApiCredentials:        *creds,
+	}, nil
+}
+
+// Get retrieves settings applicable to the environment like project
+// or category to which resources created on behalf of Kubernetes cluster are
+// assigned to.
+// These settings might have to be explicitly propagated to resources.
+// Return whether lookup was successful to distinguish from nil as value.
+func (*provider) Get(_ types.Topology, _ string) (
+	any, error,
+) {
+	return nil, types.ErrNotFound
+}
+
 func (prov *provider) getAdditionalTrustBundle() (string, error) {
 	if prov.prismEndpoint.AdditionalTrustBundle == nil {
 		return "", nil
 	}
+
 	if prov.prismEndpoint.AdditionalTrustBundle.Kind == credentials.NutanixTrustBundleKindString {
 		return prov.prismEndpoint.AdditionalTrustBundle.Data, nil
 	}
+
 	trustBundleRef := prov.prismEndpoint.AdditionalTrustBundle
-	cm, err := prov.cmInformer.Lister().ConfigMaps(trustBundleRef.Namespace).Get(trustBundleRef.Name)
+
+	configMap, err := prov.cmInformer.Lister().ConfigMaps(trustBundleRef.Namespace).Get(trustBundleRef.Name)
 	if err != nil {
 		return "", err
 	}
-	if cert, ok := cm.Data[certBundleKey]; ok {
+
+	if cert, ok := configMap.Data[certBundleKey]; ok {
 		return cert, nil
 	}
-	if b64Cert, ok := cm.BinaryData[certBundleKey]; ok {
+
+	if b64Cert, ok := configMap.BinaryData[certBundleKey]; ok {
 		return string(b64Cert), nil
 	}
+
 	return "", nil
 }
 
 func (prov *provider) getCredentials(_ types.Topology) (*types.ApiCredentials, error) {
 	ref := prov.prismEndpoint.CredentialRef
 	if ref == nil {
-		return nil, fmt.Errorf("credential reference must not be nil")
+		return nil, errors.New("credential reference must not be nil")
 	}
 
 	secret, err := prov.secretInformer.Lister().Secrets(ref.Namespace).Get(ref.Name)
@@ -63,50 +114,6 @@ func (prov *provider) getCredentials(_ types.Topology) (*types.ApiCredentials, e
 	}
 
 	return credentials.ParseCredentials(credsData)
-}
-
-type endpointParseError struct {
-	cause error
-}
-
-func (*endpointParseError) Error() string { return "error parsing Kubernetes environment endpoint" }
-
-func (err *endpointParseError) Unwrap() error { return err.cause }
-
-// GetManagementEndpoint retrieves management endpoint
-func (prov *provider) GetManagementEndpoint(
-	topology types.Topology,
-) (*types.ManagementEndpoint, error) {
-	creds, err := prov.getCredentials(topology)
-	if err != nil {
-		return nil, err
-	}
-	addr, err := url.Parse(fmt.Sprintf("https://%s:%d",
-		prov.prismEndpoint.Address, prov.prismEndpoint.Port))
-	if err != nil {
-		return nil, &endpointParseError{cause: err}
-	}
-	trustBundle, err := prov.getAdditionalTrustBundle()
-	if err != nil {
-		return nil, err
-	}
-	return &types.ManagementEndpoint{
-		Address:               addr,
-		Insecure:              prov.prismEndpoint.Insecure,
-		AdditionalTrustBundle: trustBundle,
-		ApiCredentials:        *creds,
-	}, nil
-}
-
-// Get retrieves settings applicable to the environment like project
-// or category to which resources created on behalf of Kubernetes cluster are
-// assigned to.
-// These settings might have to be explicitly propagated to resources.
-// Return whether lookup was successful to distinguish from nil as value.
-func (prov *provider) Get(topology types.Topology, key string) (
-	interface{}, error,
-) {
-	return nil, types.ErrNotFound
 }
 
 // NewProvider constructs Kubernetes Environment provider taking

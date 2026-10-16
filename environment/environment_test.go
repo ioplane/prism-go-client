@@ -1,4 +1,4 @@
-package environment
+package environment_test
 
 import (
 	"errors"
@@ -6,86 +6,114 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/nutanix-cloud-native/prism-go-client/environment"
+
 	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 )
 
 type testProvider struct {
 	// single management endpoint
 	mgmtEndpoint *types.ManagementEndpoint
 	// variables as JSON doc
-	vars  map[string]interface{}
+	vars  map[string]any
 	err   error
 	calls int
 }
 
 func (prov *testProvider) GetManagementEndpoint(
-	topology types.Topology,
+	_ types.Topology,
 ) (*types.ManagementEndpoint, error) {
 	prov.calls++
+
 	return prov.mgmtEndpoint, prov.err
 }
 
-func (prov *testProvider) Get(topology types.Topology, key string) (
-	interface{}, error,
+func (prov *testProvider) Get(_ types.Topology, key string) (
+	any, error,
 ) {
 	prov.calls++
 	if prov.err != nil {
 		return nil, prov.err
 	}
+
 	if val, ok := prov.vars[key]; ok {
 		return val, nil
 	}
+
 	return nil, types.ErrNotFound
 }
 
 func TestEnvironment(t *testing.T) {
-	g := NewWithT(t)
-	me := &types.ManagementEndpoint{
-		Address: &url.URL{Scheme: "https", Host: "pc"},
-		ApiCredentials: types.ApiCredentials{
-			Username: "k8s",
-			Password: "k8s/4u",
-		},
+	matcher := gomega.NewWithT(t)
+	managementEndpoint := &types.ManagementEndpoint{
+		Address:  &url.URL{Scheme: "https", Host: "pc"},
+		Username: "k8s",
+		Password: "k8s/4u",
 	}
-	env := NewEnvironment(
+	env := environment.NewEnvironment(
 		&testProvider{
-			mgmtEndpoint: me,
-			vars: map[string]interface{}{
+			err:          nil,
+			calls:        0,
+			mgmtEndpoint: managementEndpoint,
+			vars: map[string]any{
 				"foo": true,
 			},
 		},
 		&testProvider{
-			vars: map[string]interface{}{
+			mgmtEndpoint: nil,
+			err:          nil,
+			calls:        0,
+			vars: map[string]any{
 				"bar": false,
 			},
 		},
 	)
 
 	val, err := env.Get(nil, "bar")
-	g.Expect(err).To(BeNil())
-	g.Expect(val).To(BeFalse())
+	matcher.Expect(err).ToNot(gomega.HaveOccurred())
+	matcher.Expect(val).To(gomega.BeFalse())
 	val, err = env.Get(nil, "foo")
-	g.Expect(err).To(BeNil())
-	g.Expect(val).To(BeTrue())
-	_, err = env.Get(nil, "none")
-	g.Expect(err).To(BeIdenticalTo(types.ErrNotFound))
+	matcher.Expect(err).ToNot(gomega.HaveOccurred())
+	matcher.Expect(val).To(gomega.BeTrue())
 
-	g.Expect(env.GetManagementEndpoint(nil)).To(BeIdenticalTo(me))
+	_, err = env.Get(nil, "none")
+	matcher.Expect(err).To(gomega.BeIdenticalTo(types.ErrNotFound))
+
+	matcher.Expect(env.GetManagementEndpoint(nil)).To(gomega.BeIdenticalTo(managementEndpoint))
 }
 
-func TestEnvironmentProviderErrors(t *testing.T) {
-	hardError := errors.New("provider unavailable")
-	for _, test := range []struct {
-		name         string
-		firstError   error
-		secondError  error
-		wantError    error
-		wantFallback bool
-	}{
-		{name: "wrapped absence", firstError: fmt.Errorf("provider: %w", types.ErrNotFound), wantFallback: true},
-		{name: "hard error", firstError: hardError, wantError: hardError},
-		{name: "nil success"},
+type providerErrorCase struct {
+	name         string
+	firstError   error
+	secondError  error
+	wantError    error
+	wantFallback bool
+}
+
+func providerErrorCases(hardError error) []providerErrorCase {
+	return []providerErrorCase{
+		{
+			secondError:  nil,
+			wantError:    nil,
+			name:         "wrapped absence",
+			firstError:   fmt.Errorf("provider: %w", types.ErrNotFound),
+			wantFallback: true,
+		},
+		{
+			secondError:  nil,
+			wantFallback: false,
+			name:         "hard error",
+			firstError:   hardError,
+			wantError:    hardError,
+		},
+		{
+			firstError:   nil,
+			secondError:  nil,
+			wantError:    nil,
+			wantFallback: false,
+			name:         "nil success",
+		},
 		{
 			name:         "all absent",
 			firstError:   fmt.Errorf("provider: %w", types.ErrNotFound),
@@ -93,34 +121,53 @@ func TestEnvironmentProviderErrors(t *testing.T) {
 			wantError:    types.ErrNotFound,
 			wantFallback: true,
 		},
-	} {
+	}
+}
+
+func TestEnvironmentProviderErrors(t *testing.T) {
+	hardError := errors.New("provider unavailable")
+	for _, test := range providerErrorCases(hardError) {
 		t.Run(test.name, func(t *testing.T) {
-			g := NewWithT(t)
+			matcher := gomega.NewWithT(t)
 			endpoint := &types.ManagementEndpoint{}
-			first := &testProvider{vars: map[string]interface{}{"fixture": nil}, err: test.firstError}
-			second := &testProvider{mgmtEndpoint: endpoint, vars: map[string]interface{}{"fixture": true}, err: test.secondError}
-			environment := NewEnvironment(first, second)
-			value, valueError := environment.Get(nil, "fixture")
-			managementEndpoint, endpointError := environment.GetManagementEndpoint(nil)
+			first := &testProvider{
+				mgmtEndpoint: nil,
+				calls:        0,
+				vars:         map[string]any{"fixture": nil},
+				err:          test.firstError,
+			}
+			second := &testProvider{
+				calls:        0,
+				mgmtEndpoint: endpoint,
+				vars:         map[string]any{"fixture": true},
+				err:          test.secondError,
+			}
+			env := environment.NewEnvironment(first, second)
+			value, valueError := env.Get(nil, "fixture")
+			managementEndpoint, endpointError := env.GetManagementEndpoint(nil)
+
 			if test.wantError == nil {
-				g.Expect(valueError).NotTo(HaveOccurred())
-				g.Expect(endpointError).NotTo(HaveOccurred())
+				matcher.Expect(valueError).NotTo(gomega.HaveOccurred())
+				matcher.Expect(endpointError).NotTo(gomega.HaveOccurred())
 			} else {
-				g.Expect(valueError).To(BeIdenticalTo(test.wantError))
-				g.Expect(endpointError).To(BeIdenticalTo(test.wantError))
+				matcher.Expect(valueError).To(gomega.BeIdenticalTo(test.wantError))
+				matcher.Expect(endpointError).To(gomega.BeIdenticalTo(test.wantError))
 			}
+
 			if test.wantFallback && test.wantError == nil {
-				g.Expect(value).To(BeTrue())
-				g.Expect(managementEndpoint).To(BeIdenticalTo(endpoint))
+				matcher.Expect(value).To(gomega.BeTrue())
+				matcher.Expect(managementEndpoint).To(gomega.BeIdenticalTo(endpoint))
 			} else {
-				g.Expect(value).To(BeNil())
-				g.Expect(managementEndpoint).To(BeNil())
+				matcher.Expect(value).To(gomega.BeNil())
+				matcher.Expect(managementEndpoint).To(gomega.BeNil())
 			}
-			g.Expect(first.calls).To(Equal(2))
+
+			matcher.Expect(first.calls).To(gomega.Equal(2))
+
 			if test.wantFallback {
-				g.Expect(second.calls).To(Equal(2))
+				matcher.Expect(second.calls).To(gomega.Equal(2))
 			} else {
-				g.Expect(second.calls).To(BeZero())
+				matcher.Expect(second.calls).To(gomega.BeZero())
 			}
 		})
 	}
