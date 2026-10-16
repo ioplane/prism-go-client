@@ -121,6 +121,21 @@ func inheritedHeadings(legacy string) map[string]bool {
 	return allowed
 }
 
+func (s *changelogState) consumeLine(line string) error {
+	if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ") {
+		err := s.heading(line)
+		if err != nil {
+			return err
+		}
+	}
+
+	if strings.HasPrefix(line, "- ") && strings.TrimSpace(strings.TrimPrefix(line, "- ")) != "" && s.category {
+		s.bullet = true
+	}
+
+	return nil
+}
+
 func validateChangelog(content, legacy string) error {
 	err := validatePreamble(content)
 	if err != nil {
@@ -136,15 +151,9 @@ func validateChangelog(content, legacy string) error {
 			break
 		}
 
-		if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ") {
-			err := state.heading(line)
-			if err != nil {
-				return err
-			}
-		}
-
-		if strings.HasPrefix(line, "- ") && strings.TrimSpace(strings.TrimPrefix(line, "- ")) != "" && state.category {
-			state.bullet = true
+		err := state.consumeLine(line)
+		if err != nil {
+			return err
 		}
 	}
 
