@@ -101,3 +101,31 @@ func TestNewClientUnsupportedDefaultTransport(t *testing.T) {
 		})
 	}
 }
+
+func TestNewClientNilRoundTripper(t *testing.T) {
+	credentials := &prismgoclient.Credentials{URL: "https://fixture.invalid", Insecure: true, ProxyURL: "http://proxy.invalid:3128"}
+	useDefault := WithRoundTripper(nil)
+	for name, options := range map[string][]ClientOption{
+		"before credentials": {useDefault, WithCredentials(credentials)},
+		"after credentials":  {WithCredentials(credentials), useDefault},
+	} {
+		t.Run(name, func(t *testing.T) {
+			client, err := NewClient(append(options, WithUserAgent("fixture"), WithAbsolutePath("fixture"))...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(client.CloseIdleConnections)
+			transport := client.ownedTransport
+			if client.httpClient.Transport != transport || transport == http.DefaultTransport {
+				t.Fatal("nil transport option discarded the private transport")
+			}
+			if !transport.TLSClientConfig.InsecureSkipVerify || transport.TLSClientConfig.RootCAs != client.certpool {
+				t.Fatal("nil transport option discarded the client TLS configuration")
+			}
+			proxy, err := transport.Proxy(nil)
+			if err != nil || proxy == nil || proxy.String() != credentials.ProxyURL {
+				t.Fatalf("nil transport option discarded the client proxy: %v", err)
+			}
+		})
+	}
+}

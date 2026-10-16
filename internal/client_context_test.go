@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -66,12 +65,20 @@ func (*contextTransport) RoundTrip(*http.Request) (*http.Response, error) {
 func (t *contextTransport) CloseIdleConnections() { t.closed.Add(1) }
 
 func TestClientCallerOwnedTransport(t *testing.T) {
-	caller := &contextTransport{}
-	credentials := prism.Credentials{URL: "https://fixture.invalid", APIKey: "fixture"}
-	client, err := internal.NewClient(internal.WithCredentials(&credentials), internal.WithUserAgent("fixture"), internal.WithAbsolutePath("api/nutanix/v3"), internal.WithRoundTripper(caller))
-	require.NoError(t, err)
-	client.CloseIdleConnections()
-	assert.Zero(t, caller.closed.Load(), "caller transport remains caller-owned")
+	for name, caller := range map[string]*contextTransport{"non-nil": {}, "nil receiver": nil} {
+		t.Run(name, func(t *testing.T) {
+			credentials := prism.Credentials{URL: "https://fixture.invalid", APIKey: "fixture"}
+			client, err := internal.NewClient(internal.WithCredentials(&credentials), internal.WithUserAgent("fixture"), internal.WithAbsolutePath("api/nutanix/v3"), internal.WithRoundTripper(caller))
+			require.NoError(t, err)
+			request, err := client.NewRequest(http.MethodGet, "/fixture", nil)
+			require.NoError(t, err)
+			require.ErrorIs(t, client.Do(context.Background(), request, nil), context.Canceled)
+			client.CloseIdleConnections()
+			if caller != nil {
+				assert.Zero(t, caller.closed.Load(), "caller transport remains caller-owned")
+			}
+		})
+	}
 }
 
 func TestConstructorNilInputs(t *testing.T) {
@@ -79,6 +86,10 @@ func TestConstructorNilInputs(t *testing.T) {
 	for name, construct := range map[string]func() (any, error){
 		"credentials":   func() (any, error) { return internal.NewClient(internal.WithCredentials(nil)) },
 		"shared option": func() (any, error) { return internal.NewClient(nil) },
+		"typed nil HTTP transport": func() (any, error) {
+			return internal.NewClient(internal.WithCredentials(&credentials), internal.WithUserAgent("fixture"),
+				internal.WithAbsolutePath("fixture"), internal.WithRoundTripper((*http.Transport)(nil)))
+		},
 		"logger": func() (any, error) {
 			return internal.NewClient(internal.WithLogger(nil), internal.WithCredentials(&credentials),
 				internal.WithUserAgent("fixture"), internal.WithAbsolutePath("fixture"))
@@ -105,8 +116,8 @@ func TestConstructorURLDiagnostics(t *testing.T) {
 		baseURL string
 		invalid bool
 	}{
-		{name: "valid proxy", proxy: "http://fixture:" + marker + "@proxy.invalid:3128", baseURL: "https://fixture.invalid"},
-		{name: "malformed proxy", proxy: "http://fixture:" + marker + "@%41.invalid", baseURL: "https://fixture.invalid", invalid: true},
+		{name: "valid proxy", proxy: "http://fixture:" + marker + "@proxy.invalid:3128", baseURL: "https://fixture.invalid/"},
+		{name: "malformed proxy", proxy: "http://fixture:" + marker + "@%41.invalid", baseURL: "https://fixture.invalid/", invalid: true},
 		{name: "valid API URL", baseURL: "https://fixture:" + marker + "@fixture.invalid/path?token=" + marker},
 		{name: "malformed API URL", baseURL: "https://fixture:" + marker + "@%41.invalid/path?token=" + marker, invalid: true},
 	} {
@@ -125,7 +136,7 @@ func TestConstructorURLDiagnostics(t *testing.T) {
 				require.Contains(t, cause.URL, marker)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, strings.TrimSuffix(test.baseURL, "/"), strings.TrimSuffix(client.BaseURL.String(), "/"))
+				require.Equal(t, test.baseURL, client.BaseURL.String())
 				client.CloseIdleConnections()
 			}
 			require.NotContains(t, logs.String(), marker)

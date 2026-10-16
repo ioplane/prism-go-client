@@ -195,8 +195,16 @@ func WithCertificate(cert *x509.Certificate) ClientOption {
 // WithRoundTripper overrides the transport for the httpClient
 // Overriding transport is useful for testing against API Mocks
 // This is not recommended for production use
+// A nil interface restores the client's private default transport.
 func WithRoundTripper(transport http.RoundTripper) ClientOption {
 	return func(c *Client) error {
+		if transport == nil {
+			c.httpClient.Transport = c.ownedTransport
+			return nil
+		}
+		if concrete, ok := transport.(*http.Transport); ok && concrete == nil {
+			return fmt.Errorf("HTTP transport must not be nil")
+		}
 		c.httpClient.Transport = transport
 		return nil
 	}

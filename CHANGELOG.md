@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A nil RoundTripper option restores the client's private default transport, preserving its TLS/proxy settings instead of falling back to the process-global transport. A typed-nil *http.Transport returns an explicit constructor error; external RoundTripper implementations with working nil receivers remain supported.
+
 - Nil credentials, client options and loggers return constructor errors instead of panicking across shared, v3, v4 and Konnector entrypoints.
 
 - Nusights retry documentation matches the existing 10-second minimum and 300-second maximum waits. Secretdir tests use isolated temporary directories and restore environment variables, allowing read-only source mounts.
