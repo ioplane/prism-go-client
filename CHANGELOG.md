@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Development containers run as UID 65532 with read-only SDK source mounts and separate writable SDK module, build and lint caches. The existing gofmt checks and all declared test, module and vulnerability gates remain enabled.
+
 - Fork pull request titles and descriptions and new commit messages use English; commit titles retain declarative Conventional Commits.
 
 - Response diagnostics no longer echo server messages, body fields or arbitrary HTTP status text. Consumers must use `errors.As` with `ResponseError.StatusCode` and `errors.Is` with the unwrapped cause instead of matching server message strings.
@@ -70,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API response, decode, copy and close errors use safe diagnostics while retaining causes for programmatic inspection. Non-2xx body parsing and implicit server-message logging are removed.
 
 ### Added
+
+- The declared Podman `check` target now blocks on the existing six-linter profile for the root module, hidden `.ci` package and independent `nusights` module.
 
 - Context-aware v3/Konnector constructors and v3/v4 cache entrypoints support cancellation of constructor authentication and independent waiters. Existing entrypoints retain their Background behavior; no new default deadline or generated-v4 transport policy is introduced.
 

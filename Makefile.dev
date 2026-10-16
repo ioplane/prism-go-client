@@ -1,15 +1,16 @@
 PODMAN ?= podman
 DEV_IMAGE ?= localhost/ioplane-prism-go-client:dev
 SOURCE_REVISION := $(shell git rev-parse HEAD)
-DEV_RUN = $(PODMAN) run --rm -v $(CURDIR):/src:z -w /src \
-	-v ioplane-nutanix-driver-go-modules:/cache/modules \
-	-v ioplane-nutanix-driver-go-build:/cache/build --env GOVERNANCE_TITLE --env GOVERNANCE_TITLES $(DEV_IMAGE)
+DEV_RUN = $(PODMAN) run --rm -v $(CURDIR):/src:ro,z -w /src \
+	-v ioplane-prism-sdk-go-modules:/cache/modules \
+	-v ioplane-prism-sdk-go-build:/cache/build \
+	-v ioplane-prism-sdk-go-lint:/cache/lint --env GOVERNANCE_TITLE --env GOVERNANCE_TITLES $(DEV_IMAGE)
 
 # These existing integration tests require the external Keploy server on :6789.
 KEPLOY_V3 = TestOperations_(CreateRecoveryPlan|GetRecoveryPlan|ListRecoveryPlans|UpdateRecoveryPlans|DeleteRecoveryPlan|GetPrismCentral|ListSubnet|GetSubnet|GetCluster|ListCluster|CreateIdempotenceIdentifers|GetIdempotenceIdentifers|DeleteIdempotenceIdentifers|CreateVM|GetVM|ListVM|UpdateVM)
 KEPLOY_KONNECTOR = TestKonnector(CreateClusterRegistration|UpdateClusterRegistration|CreateClusterRegistrationWithNoCategory|CreateClusterRegistrationWithNoUUID|CreateClusterRegistrationWithNoK8sDistribution|CreateClusterRegistrationAndSetInfo|CreateClusterRegistrationAndAddonSetInfo|GetK8sRegistrationList|CreateClusterRegistrationAndSetMetrics)|TestMetaOperations_(GetVersion|GetSemanticVersion)
 
-.PHONY: dev-build regression unit unit-all vet fmt-check build mod-check vuln check
+.PHONY: dev-build regression unit unit-all vet fmt-check lint build mod-check vuln check
 dev-build:
 	$(PODMAN) build --build-arg SOURCE_REVISION=$(SOURCE_REVISION) -t $(DEV_IMAGE) -f Containerfile.dev .
 regression:
@@ -22,6 +23,10 @@ vet:
 	$(DEV_RUN) go vet ./...
 fmt-check:
 	$(DEV_RUN) sh -ec 'test -z "$$(gofmt -l converged/v4/structs.go converged/v4/operation_wait_test.go errors.go internal/client_test.go internal/client.go internal/client_transport_test.go internal/client_response_test.go internal/client_upload_test.go internal/client_session_test.go internal/client_context_test.go internal/client_benchmark_test.go v3/cache_benchmark_test.go v3/cache_concurrency_test.go v3/v3_service.go v3/list_all.go v3/list_all_test.go v4/cache_concurrency_test.go v3/v3.go v3/cache.go v4/cache.go v4/v4.go konnector/konnector_api.go .ci)"'
+lint:
+	$(DEV_RUN) golangci-lint run ./... ./.ci
+	$(DEV_RUN) sh -ec 'cd nusights; golangci-lint run ./...'
+
 build:
 	$(DEV_RUN) go build ./...
 mod-check:
@@ -29,7 +34,7 @@ mod-check:
 	$(DEV_RUN) go mod verify
 vuln:
 	$(DEV_RUN) go tool govulncheck ./...
-check: governance mod-check nusights-check fmt-check regression unit-all benchmark-check vet build vuln
+check: governance mod-check nusights-check fmt-check lint regression unit-all benchmark-check vet build vuln
 
 .PHONY: nusights-check
 nusights-check:
