@@ -147,6 +147,28 @@ func DropEtag(object any) any {
 	return object
 }
 
+func writableReservedField(value reflect.Value) reflect.Value {
+	if value.Kind() != reflect.Struct {
+		return reflect.Value{}
+	}
+	definition, ok := value.Type().FieldByName("Reserved_")
+	if !ok {
+		return reflect.Value{}
+	}
+	parent := value.Type()
+	for _, index := range definition.Index[:len(definition.Index)-1] {
+		parent = parent.Field(index).Type
+		if parent.Kind() == reflect.Pointer {
+			return reflect.Value{}
+		}
+	}
+	field := structField(value, "Reserved_")
+	if !field.IsValid() || !field.CanSet() || field.Type() != reflect.TypeFor[map[string]any]() {
+		return reflect.Value{}
+	}
+	return field
+}
+
 // CopyEtag copies the ETag without mutating metadata shared with the source.
 // Pointer destinations retain their identity; struct values return an updated copy.
 // Destinations with Reserved_ promoted through an embedded pointer are unchanged to preserve shared owners.
@@ -159,22 +181,8 @@ func CopyEtag(source, destination any) any {
 	} else if value.Kind() == reflect.Pointer {
 		value = value.Elem()
 	}
-	if value.Kind() != reflect.Struct {
-		return destination
-	}
-	definition, ok := value.Type().FieldByName("Reserved_")
-	if !ok {
-		return destination
-	}
-	parent := value.Type()
-	for _, index := range definition.Index[:len(definition.Index)-1] {
-		parent = parent.Field(index).Type
-		if parent.Kind() == reflect.Pointer {
-			return destination
-		}
-	}
-	field := structField(value, "Reserved_")
-	if !field.IsValid() || !field.CanSet() || field.Type() != reflect.TypeFor[map[string]any]() {
+	field := writableReservedField(value)
+	if !field.IsValid() {
 		return destination
 	}
 	etag := GetEtag(source)
