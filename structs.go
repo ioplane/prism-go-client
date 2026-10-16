@@ -1,7 +1,7 @@
 package prismgoclient
 
 // Credentials can include either username and password for basic authentication
-// or an API key for API key-based authentication
+// or an API key for API key-based authentication.
 type Credentials struct {
 	URL         string
 	APIKey      string
@@ -20,7 +20,7 @@ type Credentials struct {
 	RequiredFields        map[string][]string // RequiredFields is client to its required fields mapping for validations and usage in every client
 }
 
-// AdditionalFilter specification for client side filters
+// AdditionalFilter specification for client side filters.
 type AdditionalFilter struct {
 	Name   string
 	Values []string

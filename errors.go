@@ -1,3 +1,4 @@
+// Package prismgoclient defines Prism credentials, filters and HTTP diagnostics.
 package prismgoclient
 
 import (
@@ -20,6 +21,7 @@ func (e *ResponseError) Error() string {
 	if e.StatusCode == http.StatusUnauthorized {
 		return "invalid Nutanix credentials"
 	}
+
 	if e.StatusCode >= http.StatusOK && e.StatusCode < http.StatusMultipleChoices {
 		return fmt.Sprintf("invalid HTTP response body (status %d)", e.StatusCode)
 	}
