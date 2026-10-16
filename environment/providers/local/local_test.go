@@ -1,6 +1,7 @@
 package local
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
@@ -56,6 +57,19 @@ func TestLocal(t *testing.T) {
 	val, err = prov.Get(nil, types.CategoriesKey)
 	matcher.Expect(err).NotTo(gomega.HaveOccurred())
 	matcher.Expect(val).To(gomega.BeEquivalentTo([]string{"k8s/foo", "project/bar"}))
+
+	const marker = "synthetic-provider-url-secret-marker"
+	for _, invalid := range []string{"fixture:" + marker + "@%41.invalid", "%41.invalid?token=" + marker} {
+		t.Setenv(endpointEnv, invalid)
+		managementEndpoint, err := prov.GetManagementEndpoint(nil)
+		require.Nil(t, managementEndpoint)
+		require.Error(t, err)
+		require.NotContains(t, err.Error(), marker)
+		var cause *url.Error
+		require.ErrorAs(t, err, &cause)
+		require.Equal(t, "https://"+invalid+":9440", cause.URL)
+		require.Equal(t, "parse", cause.Op)
+	}
 }
 
 func TestLocalRejectsMixedAuth(t *testing.T) {

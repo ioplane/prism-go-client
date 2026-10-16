@@ -149,6 +149,22 @@ binaryData:
 		_, err = cmInformer.Lister().ConfigMaps(namespace).Get(cmName)
 		Expect(err).To(Succeed())
 	})
+	It("keeps malformed endpoint diagnostics safe", func() {
+		const marker = "synthetic-kubernetes-url-secret-marker"
+		for _, address := range []string{"fixture:" + marker + "@%41.invalid", "%41.invalid?token=" + marker} {
+			invalidEndpoint := prismEndpoint
+			invalidEndpoint.Address = address
+			invalid := NewProvider(invalidEndpoint, secretInformer, cmInformer)
+			endpoint, err := invalid.GetManagementEndpoint(nil)
+			Expect(endpoint).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).NotTo(ContainSubstring(marker))
+			var cause *url.Error
+			Expect(errors.As(err, &cause)).To(BeTrue())
+			Expect(cause.URL).To(Equal("https://" + address + ":9440"))
+			Expect(cause.Op).To(Equal("parse"))
+		}
+	})
 	It("must get management endpoint", func() {
 		me, err := prov.GetManagementEndpoint(nil)
 		Expect(err).To(Succeed())

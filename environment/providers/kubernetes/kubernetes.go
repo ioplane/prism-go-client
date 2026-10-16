@@ -65,6 +65,14 @@ func (prov *provider) getCredentials(_ types.Topology) (*types.ApiCredentials, e
 	return credentials.ParseCredentials(credsData)
 }
 
+type endpointParseError struct {
+	cause error
+}
+
+func (*endpointParseError) Error() string { return "error parsing Kubernetes environment endpoint" }
+
+func (err *endpointParseError) Unwrap() error { return err.cause }
+
 // GetManagementEndpoint retrieves management endpoint
 func (prov *provider) GetManagementEndpoint(
 	topology types.Topology,
@@ -76,7 +84,7 @@ func (prov *provider) GetManagementEndpoint(
 	addr, err := url.Parse(fmt.Sprintf("https://%s:%d",
 		prov.prismEndpoint.Address, prov.prismEndpoint.Port))
 	if err != nil {
-		return nil, err
+		return nil, &endpointParseError{cause: err}
 	}
 	trustBundle, err := prov.getAdditionalTrustBundle()
 	if err != nil {

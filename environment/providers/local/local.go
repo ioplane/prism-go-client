@@ -22,6 +22,14 @@ const (
 
 type provider struct{}
 
+type endpointParseError struct {
+	cause error
+}
+
+func (*endpointParseError) Error() string { return "error parsing local environment endpoint" }
+
+func (err *endpointParseError) Unwrap() error { return err.cause }
+
 func (*provider) GetManagementEndpoint(
 	_ types.Topology,
 ) (*types.ManagementEndpoint, error) {
@@ -43,7 +51,7 @@ func (*provider) GetManagementEndpoint(
 
 	addr, err := url.Parse(address)
 	if err != nil {
-		return nil, err
+		return nil, &endpointParseError{cause: err}
 	}
 
 	insecureTLS := os.Getenv(insecureEnv) == "true"
