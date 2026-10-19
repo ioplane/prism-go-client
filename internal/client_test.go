@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
 	"github.com/keploy/go-sdk/integrations/khttpclient"
 	prismgoclient "github.com/nutanix-cloud-native/prism-go-client"
@@ -28,46 +29,90 @@ const (
 	testAbsolutePath   = "api/nutanix/" + testLibraryVersion
 	testUserAgent      = "nutanix/" + testLibraryVersion
 	fileName           = "../v3/v3.go"
+	testUsername       = "username"
+	testPassword       = "password"
+	testHost           = "foo.com"
+	testFooPath        = "/foo"
+	testName           = "name"
+	testBar            = "bar"
+	testContentType    = "Content-Type"
+	testAccept         = "Accept"
+	testAuthorization  = "Authorization"
+	testKind           = "kind"
+	testProject        = "project"
+	testClientError    = "client error"
+	testKey            = "key"
+	testValue          = "value"
+	testPath           = "/test"
+	testUploadPath     = "/upload"
+	testRootPath       = "/"
+	testNilHTTPClient  = "nil httpClient"
+	testHTTPMethods    = "different HTTP methods"
+	testSessionID      = "session-id"
+	testProjectsPath   = "/projects/list"
+	testKeep           = "keep"
+	testEmptyObject    = `{}`
+	testBrokenJSON     = `{"broken":`
+	testEmptyEntities  = `{"entities":[]}`
+	testEndpoint       = "http://fixture.invalid"
+	testSecretMarker   = "fixture-secret-marker"
 )
 
+func writeTestResponse(t *testing.T, writer http.ResponseWriter, payload string) {
+	t.Helper()
+
+	if _, err := io.WriteString(writer, payload); err != nil {
+		t.Error(err)
+
+		return
+	}
+}
+
 func setup(t *testing.T) (*http.ServeMux, *Client, *httptest.Server) {
+	t.Helper()
+
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 
-	creds := &prismgoclient.Credentials{URL: server.URL, Username: "username", Password: "password", Insecure: true}
-	c, err := NewClient(
-		WithCredentials(creds),
-		WithUserAgent(testUserAgent),
-		WithAbsolutePath(testAbsolutePath),
-		WithBaseURL(creds.URL))
-	require.NoError(t, err)
+	creds := &prismgoclient.Credentials{URL: server.URL, Username: testUsername, Password: testPassword, Insecure: true}
+	client := newTestClient(t, creds)
 
-	return mux, c, server
+	return mux, client, server
 }
 
-func TestNewClient(t *testing.T) {
-	// New returns a logr.Logger which is implemented by an arbitrary function.
-	tlog := testr.New(t)
-	tests := []struct {
-		testCase    string
-		opts        []ClientOption
-		wantErr     bool
-		expectedErr string
-		validation  func(t *testing.T, c *Client)
-	}{
+func newTestClient(t *testing.T, credentials *prismgoclient.Credentials) *Client {
+	t.Helper()
+
+	client, err := NewClient(WithCredentials(credentials), WithUserAgent(testUserAgent),
+		WithAbsolutePath(testAbsolutePath), WithBaseURL(credentials.URL))
+	require.NoError(t, err)
+
+	return client
+}
+
+func testClientOptions(credentials *prismgoclient.Credentials) []ClientOption {
+	return []ClientOption{WithUserAgent(testUserAgent), WithAbsolutePath(testAbsolutePath), WithCredentials(credentials)}
+}
+
+type newClientTestCase struct {
+	testCase    string
+	opts        []ClientOption
+	wantErr     bool
+	expectedErr string
+	validation  func(t *testing.T, client *Client)
+}
+
+func requiredClientCases() []newClientTestCase {
+	return []newClientTestCase{
 		{
 			testCase: "valid",
-			opts: []ClientOption{
-				WithUserAgent(testUserAgent),
-				WithAbsolutePath(testAbsolutePath),
-				WithCredentials(&prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password"}),
-			},
+			opts:     testClientOptions(&prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword}),
 		},
 		{
 			testCase: "no user agent",
 			opts: []ClientOption{
 				WithAbsolutePath(testAbsolutePath),
-				WithCredentials(&prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password"}),
+				WithCredentials(&prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword}),
 			},
 			wantErr:     true,
 			expectedErr: "userAgent argument must be passed",
@@ -76,7 +121,7 @@ func TestNewClient(t *testing.T) {
 			testCase: "no absolute path",
 			opts: []ClientOption{
 				WithUserAgent(testUserAgent),
-				WithCredentials(&prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password"}),
+				WithCredentials(&prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword}),
 			},
 			wantErr:     true,
 			expectedErr: "absolutePath argument must be passed",
@@ -90,119 +135,116 @@ func TestNewClient(t *testing.T) {
 			wantErr:     true,
 			expectedErr: "credentials argument must be passed",
 		},
+	}
+}
+
+func loggerURLClientCases(logger *logr.Logger) []newClientTestCase {
+	return []newClientTestCase{
 		{
 			testCase: "custom logger",
-			opts: []ClientOption{
-				WithUserAgent(testUserAgent),
-				WithAbsolutePath(testAbsolutePath),
-				WithCredentials(&prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password"}),
-				WithLogger(&tlog),
-			},
-			validation: func(t *testing.T, c *Client) {
-				require.NotNil(t, c.logger)
-				c.logger.Info("test")
+			opts:     append(testClientOptions(&prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword}), WithLogger(logger)),
+			validation: func(t *testing.T, client *Client) {
+				t.Helper()
+				require.NotNil(t, client.logger)
+				client.logger.Info("test")
 			},
 		},
 		{
 			testCase: "no logger creates default logger",
-			opts: []ClientOption{
-				WithUserAgent(testUserAgent),
-				WithAbsolutePath(testAbsolutePath),
-				WithCredentials(&prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password"}),
-			},
-			validation: func(t *testing.T, c *Client) {
-				assert.NotNil(t, c.logger)
+			opts:     testClientOptions(&prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword}),
+			validation: func(t *testing.T, client *Client) {
+				t.Helper()
+				assert.NotNil(t, client.logger)
 			},
 		},
 		{
 			testCase: "credentials URL is used when base URL is not provided",
-			opts: []ClientOption{
-				WithUserAgent(testUserAgent),
-				WithAbsolutePath(testAbsolutePath),
-				WithCredentials(&prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password"}),
-			},
-			validation: func(t *testing.T, c *Client) {
-				assert.Contains(t, c.BaseURL.String(), "foo.com")
+			opts:     testClientOptions(&prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword}),
+			validation: func(t *testing.T, client *Client) {
+				t.Helper()
+				assert.Contains(t, client.BaseURL.String(), testHost)
 			},
 		},
 		{
 			testCase: "credentials URL is ignored when base URL is provided",
-			opts: []ClientOption{
-				WithUserAgent(testUserAgent),
-				WithAbsolutePath(testAbsolutePath),
-				WithCredentials(&prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password"}),
-				WithBaseURL("bar.com"),
-			},
-			validation: func(t *testing.T, c *Client) {
-				assert.Contains(t, c.BaseURL.String(), "bar.com")
-				assert.NotContains(t, c.BaseURL.String(), "foo.com")
+			opts: append(testClientOptions(&prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword}),
+				WithBaseURL("bar.com")),
+			validation: func(t *testing.T, client *Client) {
+				t.Helper()
+				assert.Contains(t, client.BaseURL.String(), "bar.com")
+				assert.NotContains(t, client.BaseURL.String(), testHost)
 			},
 		},
+	}
+}
+
+func transportClientCases() []newClientTestCase {
+	return []newClientTestCase{
 		{
 			testCase: "if insecure credentials is set, skip TLS verification",
-			opts: []ClientOption{
-				WithUserAgent(testUserAgent),
-				WithAbsolutePath(testAbsolutePath),
-				WithCredentials(&prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}),
-			},
-			validation: func(t *testing.T, c *Client) {
-				assert.True(t, c.httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify)
+			opts:     testClientOptions(&prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}),
+			validation: func(t *testing.T, client *Client) {
+				t.Helper()
+
+				transport, ok := client.httpClient.Transport.(*http.Transport)
+				require.True(t, ok)
+				assert.True(t, transport.TLSClientConfig.InsecureSkipVerify)
 			},
 		},
 		{
 			testCase: "if insecure credentials is not set, ensure TLS verification",
-			opts: []ClientOption{
-				WithUserAgent(testUserAgent),
-				WithAbsolutePath(testAbsolutePath),
-				WithCredentials(&prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password"}),
-			},
-			validation: func(t *testing.T, c *Client) {
-				assert.False(t, c.httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify)
+			opts:     testClientOptions(&prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword}),
+			validation: func(t *testing.T, client *Client) {
+				t.Helper()
+
+				transport, ok := client.httpClient.Transport.(*http.Transport)
+				require.True(t, ok)
+				assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
 			},
 		},
 		{
 			testCase: "WithRoundTripper overrides the underlying transport",
-			opts: []ClientOption{
-				WithUserAgent(testUserAgent),
-				WithAbsolutePath(testAbsolutePath),
-				WithCredentials(&prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password"}),
-				WithRoundTripper(khttpclient.NewInterceptor(http.DefaultTransport)),
-			},
-			validation: func(t *testing.T, c *Client) {
-				assert.IsType(t, &khttpclient.Interceptor{}, c.httpClient.Transport)
+			opts: append(testClientOptions(&prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword}),
+				WithRoundTripper(khttpclient.NewInterceptor(http.DefaultTransport))),
+			validation: func(t *testing.T, client *Client) {
+				t.Helper()
+				assert.IsType(t, &khttpclient.Interceptor{}, client.httpClient.Transport)
 			},
 		},
 	}
+}
+
+func TestNewClient(t *testing.T) {
+	// New returns a logr.Logger implemented by an arbitrary function.
+	logger := testr.New(t)
+	tests := append(requiredClientCases(), loggerURLClientCases(&logger)...)
+	tests = append(tests, transportClientCases()...)
 
 	for _, test := range tests {
-		c, err := NewClient(test.opts...)
+		client, err := NewClient(test.opts...)
 		if test.wantErr {
-			assert.Nil(t, c)
-			assert.Error(t, err)
+			assert.Nil(t, client)
+			require.Error(t, err)
 			assert.Contains(t, err.Error(), test.expectedErr)
 		} else {
-			assert.NotNil(t, c)
-			assert.NoError(t, err)
+			assert.NotNil(t, client)
+			require.NoError(t, err)
+
 			if test.validation != nil {
-				test.validation(t, c)
+				test.validation(t, client)
 			}
 		}
 	}
 }
 
 func TestNewRequest(t *testing.T) {
-	creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: false}
-	c, err := NewClient(
-		WithCredentials(creds),
-		WithUserAgent(testUserAgent),
-		WithAbsolutePath(testAbsolutePath),
-		WithBaseURL(creds.URL))
-	require.NoError(t, err)
+	creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: false}
+	client := newTestClient(t, creds)
 
-	inURL, outURL := "/foo", fmt.Sprintf(defaultBaseURL+testAbsolutePath+"/foo", "https", "foo.com")
-	inBody, outBody := map[string]interface{}{"name": "bar"}, `{"name":"bar"}`+"\n"
+	inURL, outURL := testFooPath, fmt.Sprintf(defaultBaseURL+testAbsolutePath+testFooPath, "https", testHost)
+	inBody, outBody := map[string]any{testName: testBar}, `{"name":"bar"}`+"\n"
 
-	req, err := c.NewRequest(http.MethodPost, inURL, inBody)
+	req, err := client.NewRequest(http.MethodPost, inURL, inBody)
 	require.NoError(t, err)
 
 	// test relative URL was expanded
@@ -213,21 +255,17 @@ func TestNewRequest(t *testing.T) {
 	// test body was JSON encoded
 	body, err := io.ReadAll(req.Body)
 	require.NoError(t, err)
+
 	if string(body) != outBody {
 		t.Errorf("NewRequest(%v) Body = %v, expected %v", inBody, string(body), outBody)
 	}
 }
 
 func TestNewUploadRequest(t *testing.T) {
-	creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-	c, err := NewClient(
-		WithCredentials(creds),
-		WithUserAgent(testUserAgent),
-		WithAbsolutePath(testAbsolutePath),
-		WithBaseURL(creds.URL))
-	require.NoError(t, err)
+	creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+	client := newTestClient(t, creds)
 
-	inURL, outURL := "/foo", fmt.Sprintf(defaultBaseURL+testAbsolutePath+"/foo", SchemeHTTPS, "foo.com")
+	inURL, outURL := testFooPath, fmt.Sprintf(defaultBaseURL+testAbsolutePath+testFooPath, SchemeHTTPS, testHost)
 	inBody, err := os.Open(fileName)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, inBody.Close()) })
@@ -236,10 +274,11 @@ func TestNewUploadRequest(t *testing.T) {
 	out, err := os.Open(fileName)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, out.Close()) })
+
 	outBody, err := io.ReadAll(out)
 	require.NoError(t, err)
 
-	req, err := c.NewUploadRequest(http.MethodPost, inURL, inBody)
+	req, err := client.NewUploadRequest(http.MethodPost, inURL, inBody)
 	require.NoError(t, err)
 	// test relative URL was expanded
 	assert.Equal(t, outURL, req.URL.String())
@@ -251,8 +290,8 @@ func TestNewUploadRequest(t *testing.T) {
 
 	// test headers.
 	inHeaders := map[string]string{
-		"Content-Type": octetStreamType,
-		"Accept":       mediaType,
+		testContentType: octetStreamType,
+		testAccept:      mediaType,
 	}
 	for k, v := range inHeaders {
 		assert.Equal(t, v, req.Header[k][0])
@@ -260,18 +299,13 @@ func TestNewUploadRequest(t *testing.T) {
 }
 
 func TestNewUnAuthRequest(t *testing.T) {
-	creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-	c, err := NewClient(
-		WithCredentials(creds),
-		WithUserAgent(testUserAgent),
-		WithAbsolutePath(testAbsolutePath),
-		WithBaseURL(creds.URL))
-	require.NoError(t, err)
+	creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+	client := newTestClient(t, creds)
 
-	inURL, outURL := "/foo", fmt.Sprintf(defaultBaseURL+testAbsolutePath+"/foo", SchemeHTTPS, "foo.com")
-	inBody, outBody := map[string]interface{}{"name": "bar"}, `{"name":"bar"}`+"\n"
+	inURL, outURL := testFooPath, fmt.Sprintf(defaultBaseURL+testAbsolutePath+testFooPath, SchemeHTTPS, testHost)
+	inBody, outBody := map[string]any{testName: testBar}, `{"name":"bar"}`+"\n"
 
-	req, err := c.NewUnAuthRequest(http.MethodPost, inURL, inBody)
+	req, err := client.NewUnAuthRequest(http.MethodPost, inURL, inBody)
 	require.NoError(t, err)
 
 	// test relative URL was expanded
@@ -282,18 +316,20 @@ func TestNewUnAuthRequest(t *testing.T) {
 	// test body was JSON encoded
 	body, err := io.ReadAll(req.Body)
 	require.NoError(t, err)
+
 	if string(body) != outBody {
 		t.Errorf("NewUnAuthRequest(%v) Body = %v, expected %v", inBody, string(body), outBody)
 	}
 
 	// test headers. Authorization header shouldn't exist
-	if _, ok := req.Header["Authorization"]; ok {
-		t.Errorf("Unexpected Authorization header obtained in request from NewUnAuthRequest()")
+	if _, ok := req.Header[testAuthorization]; ok {
+		t.Error("Unexpected Authorization header obtained in request from NewUnAuthRequest()")
 	}
+
 	inHeaders := map[string]string{
-		"Content-Type": mediaType,
-		"Accept":       mediaType,
-		"User-Agent":   testUserAgent,
+		testContentType: mediaType,
+		testAccept:      mediaType,
+		"User-Agent":    testUserAgent,
 	}
 	for k, v := range req.Header {
 		if v[0] != inHeaders[k] {
@@ -303,19 +339,14 @@ func TestNewUnAuthRequest(t *testing.T) {
 }
 
 func TestNewUnAuthFormEncodedRequest(t *testing.T) {
-	creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-	c, err := NewClient(
-		WithCredentials(creds),
-		WithUserAgent(testUserAgent),
-		WithAbsolutePath(testAbsolutePath),
-		WithBaseURL(creds.URL))
-	require.NoError(t, err)
+	creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+	client := newTestClient(t, creds)
 
-	inURL, outURL := "/foo", fmt.Sprintf(defaultBaseURL+testAbsolutePath+"/foo", SchemeHTTPS, "foo.com")
-	inBody := map[string]string{"name": "bar", "fullname": "foobar"}
-	outBody := map[string][]string{"name": {"bar"}, "fullname": {"foobar"}}
+	inURL, outURL := testFooPath, fmt.Sprintf(defaultBaseURL+testAbsolutePath+testFooPath, SchemeHTTPS, testHost)
+	inBody := map[string]string{testName: testBar, "fullname": "foobar"}
+	outBody := map[string][]string{testName: {testBar}, "fullname": {"foobar"}}
 
-	req, err := c.NewUnAuthFormEncodedRequest(http.MethodPost, inURL, inBody)
+	req, err := client.NewUnAuthFormEncodedRequest(http.MethodPost, inURL, inBody)
 	require.NoError(t, err)
 
 	// test relative URL was expanded
@@ -329,18 +360,19 @@ func TestNewUnAuthFormEncodedRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	// check form encoded key-values as compared to input values
-	if !reflect.DeepEqual(outBody, (map[string][]string)(req.PostForm)) {
+	if !reflect.DeepEqual(outBody, map[string][]string(req.PostForm)) {
 		t.Errorf("NewUnAuthFormEncodedRequest(%v) Form encoded k-v, got = %v, expected %v", inBody, req.PostForm, outBody)
 	}
 
 	// test headers. Authorization header shouldn't exist
-	if _, ok := req.Header["Authorization"]; ok {
-		t.Errorf("Unexpected Authorization header obtained in request from NewUnAuthFormEncodedRequest()")
+	if _, ok := req.Header[testAuthorization]; ok {
+		t.Error("Unexpected Authorization header obtained in request from NewUnAuthFormEncodedRequest()")
 	}
+
 	inHeaders := map[string]string{
-		"Content-Type": formEncodedType,
-		"Accept":       mediaType,
-		"User-Agent":   testUserAgent,
+		testContentType: formEncodedType,
+		testAccept:      mediaType,
+		"User-Agent":    testUserAgent,
 	}
 	for k, v := range req.Header {
 		if v[0] != inHeaders[k] {
@@ -350,15 +382,10 @@ func TestNewUnAuthFormEncodedRequest(t *testing.T) {
 }
 
 func TestNewUnAuthUploadRequest(t *testing.T) {
-	creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-	c, err := NewClient(
-		WithCredentials(creds),
-		WithUserAgent(testUserAgent),
-		WithAbsolutePath(testAbsolutePath),
-		WithBaseURL(creds.URL))
-	require.NoError(t, err)
+	creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+	client := newTestClient(t, creds)
 
-	inURL, outURL := "/foo", fmt.Sprintf(defaultBaseURL+testAbsolutePath+"/foo", SchemeHTTPS, "foo.com")
+	inURL, outURL := testFooPath, fmt.Sprintf(defaultBaseURL+testAbsolutePath+testFooPath, SchemeHTTPS, testHost)
 	inBody, err := os.Open(fileName)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, inBody.Close()) })
@@ -367,10 +394,11 @@ func TestNewUnAuthUploadRequest(t *testing.T) {
 	out, err := os.Open(fileName)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, out.Close()) })
+
 	outBody, err := io.ReadAll(out)
 	require.NoError(t, err)
 
-	req, err := c.NewUnAuthUploadRequest(http.MethodPost, inURL, inBody)
+	req, err := client.NewUnAuthUploadRequest(http.MethodPost, inURL, inBody)
 	require.NoError(t, err)
 	// test relative URL was expanded
 	if req.URL.String() != outURL {
@@ -380,17 +408,19 @@ func TestNewUnAuthUploadRequest(t *testing.T) {
 	// test body contents
 	got, err := io.ReadAll(req.Body)
 	require.NoError(t, err)
+
 	if !bytes.Equal(got, outBody) {
 		t.Errorf("NewUnAuthUploadRequest(%v) Body = %v, expected %v", inBody, string(got), string(outBody))
 	}
 
 	// test headers. Authorization header shouldn't exist
-	if _, ok := req.Header["Authorization"]; ok {
-		t.Errorf("Unexpected Authorization header obtained in request from NewUnAuthUploadRequest()")
+	if _, ok := req.Header[testAuthorization]; ok {
+		t.Error("Unexpected Authorization header obtained in request from NewUnAuthUploadRequest()")
 	}
+
 	inHeaders := map[string]string{
-		"Content-Type": octetStreamType,
-		"Accept":       mediaType,
+		testContentType: octetStreamType,
+		testAccept:      mediaType,
 	}
 	for k, v := range inHeaders {
 		if v != req.Header[k][0] {
@@ -407,7 +437,7 @@ func TestErrorResponse_Error(t *testing.T) {
 	err := ErrorResponse{MessageList: messageList}
 
 	if err.Error() == "" {
-		t.Errorf("Expected non-empty ErrorResponse.Error()")
+		t.Error("Expected non-empty ErrorResponse.Error()")
 	}
 }
 
@@ -421,7 +451,6 @@ func TestGetResponse(t *testing.T) {
 	}
 
 	err := CheckResponse(res)
-
 	if err == nil {
 		t.Fatal("Expected error response.")
 	}
@@ -440,10 +469,10 @@ func TestCheckResponse(t *testing.T) {
 			`{"api_version": "3.1", "code": 400, "kind": "error", "message_list":
 				 [{"message": "This field may not be blank."}], "state": "ERROR"}`)),
 	}
-	err := CheckResponse(res)
 
+	err := CheckResponse(res)
 	if err == nil {
-		t.Fatalf("Expected error response.")
+		t.Fatal("Expected error response.")
 	}
 
 	var responseError *prismgoclient.ResponseError
@@ -460,18 +489,20 @@ func TestDo(t *testing.T) {
 		A string
 	}
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if m := http.MethodGet; m != r.Method {
-			t.Errorf("Request method = %v, expected %v", r.Method, m)
+	mux.HandleFunc(testRootPath, func(writer http.ResponseWriter, request *http.Request) {
+		if m := http.MethodGet; m != request.Method {
+			t.Errorf("Request method = %v, expected %v", request.Method, m)
 		}
 
-		_, _ = fmt.Fprint(w, `{"A":"a"}`)
+		writeTestResponse(t, writer, `{"A":"a"}`)
 	})
 
-	req, _ := client.NewRequest(http.MethodGet, "/", nil)
+	req, err := client.NewRequest(http.MethodGet, testRootPath, nil)
+	require.NoError(t, err)
+
 	body := new(foo)
 
-	err := client.Do(context.Background(), req, body)
+	err = client.Do(context.Background(), req, body)
 	if err != nil {
 		t.Fatalf("Do(): %v", err)
 	}
@@ -486,13 +517,14 @@ func TestDo_httpError(t *testing.T) {
 	mux, client, server := setup(t)
 	defer server.Close()
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "Bad Request", 400)
+	mux.HandleFunc(testRootPath, func(writer http.ResponseWriter, _ *http.Request) {
+		http.Error(writer, "Bad Request", http.StatusBadRequest)
 	})
 
-	req, _ := client.NewRequest(http.MethodGet, "/", nil)
-	err := client.Do(context.Background(), req, nil)
+	req, err := client.NewRequest(http.MethodGet, testRootPath, nil)
+	require.NoError(t, err)
 
+	err = client.Do(context.Background(), req, nil)
 	if err == nil {
 		t.Error("Expected HTTP 400 error.")
 	}
@@ -504,72 +536,80 @@ func TestDo_redirectLoop(t *testing.T) {
 	mux, client, server := setup(t)
 	defer server.Close()
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/", http.StatusFound)
+	mux.HandleFunc(testRootPath, func(writer http.ResponseWriter, request *http.Request) {
+		http.Redirect(writer, request, testRootPath, http.StatusFound)
 	})
 
-	req, _ := client.NewRequest(http.MethodGet, "/", nil)
-	err := client.Do(context.Background(), req, nil)
+	req, err := client.NewRequest(http.MethodGet, testRootPath, nil)
+	require.NoError(t, err)
 
+	err = client.Do(context.Background(), req, nil)
 	if err == nil {
 		t.Error("Expected error to be returned.")
 	}
+
 	var urlError *url.Error
-	if !errors.As(err, &urlError) {
-		t.Errorf("Expected a URL error; got %#v.", err)
-	}
+	require.ErrorAs(t, err, &urlError)
 }
 
 func TestDo_SessionAuthRetryResetsBodyBeforeRetry(t *testing.T) {
 	mux := http.NewServeMux()
+
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	var projectCalls atomic.Int32
-	var usersMeCalls atomic.Int32
+	var (
+		projectCalls atomic.Int32
+		usersMeCalls atomic.Int32
+	)
 
-	mux.HandleFunc("/api/nutanix/v3/users/me", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nutanix/v3/users/me", func(writer http.ResponseWriter, _ *http.Request) {
 		call := usersMeCalls.Add(1)
-		w.Header().Add("Set-Cookie", fmt.Sprintf("session-id=%d; Path=/", call))
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, `{}`)
+		writer.Header().Add("Set-Cookie", fmt.Sprintf("session-id=%d; Path=/", call))
+		writer.WriteHeader(http.StatusOK)
+		writeTestResponse(t, writer, testEmptyObject)
 	})
 
-	mux.HandleFunc("/api/nutanix/v3/projects/list", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nutanix/v3/projects/list", func(writer http.ResponseWriter, request *http.Request) {
 		call := projectCalls.Add(1)
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		assert.Equal(t, 30, len(body))
-		if call == 1 {
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = fmt.Fprint(w, `{"message":"unauthorized"}`)
+
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Error(err)
+
 			return
 		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, `{"metadata":{"total_matches":0,"offset":0},"entities":[]}`)
+
+		assert.Len(t, body, 30)
+
+		if call == 1 {
+			writer.WriteHeader(http.StatusUnauthorized)
+			writeTestResponse(t, writer, `{"message":"unauthorized"}`)
+
+			return
+		}
+
+		writer.WriteHeader(http.StatusOK)
+		writeTestResponse(t, writer, `{"metadata":{"total_matches":0,"offset":0},"entities":[]}`)
 	})
 
 	creds := &prismgoclient.Credentials{
 		URL:         server.URL,
-		Username:    "username",
-		Password:    "password",
+		Username:    testUsername,
+		Password:    testPassword,
 		Insecure:    true,
 		SessionAuth: true,
 	}
-	client, err := NewClient(
-		WithCredentials(creds),
-		WithUserAgent(testUserAgent),
-		WithAbsolutePath(testAbsolutePath),
-		WithBaseURL(creds.URL))
-	require.NoError(t, err)
+	client := newTestClient(t, creds)
 
-	req, err := client.NewRequest(http.MethodPost, "/projects/list", map[string]any{
-		"kind":   "project",
+	req, err := client.NewRequest(http.MethodPost, testProjectsPath, map[string]any{
+		testKind: testProject,
 		"length": 1,
 	})
 	require.NoError(t, err)
 
 	var result map[string]any
+
 	err = client.Do(context.Background(), req, &result)
 	require.NoError(t, err)
 	assert.Equal(t, int32(2), projectCalls.Load(), "second POST should reach server after body reset")
@@ -625,12 +665,13 @@ func TestDo_SessionAuthRetryResetsBodyBeforeRetry(t *testing.T) {
 
 // *********** Filters tests ***********
 
-func getEntity(name string, vlanID string, uuid string) string {
-	return fmt.Sprintf(`{"spec":{"cluster_reference":{"uuid":"%s"},"name":"%s","resources":{"vlan_id":%s}}}`, uuid, name, vlanID)
+func getEntity(name, vlanID, uuid string) string {
+	return fmt.Sprintf(`{"spec":{"cluster_reference":{"uuid":%q},"name":%q,"resources":{"vlan_id":%s}}}`, uuid, name, vlanID)
 }
 
 func removeWhiteSpace(input string) string {
 	whitespacePattern := regexp.MustCompile(`\s+`)
+
 	return whitespacePattern.ReplaceAllString(input, "")
 }
 
@@ -643,12 +684,17 @@ func getFilter(name string, values []string) []*prismgoclient.AdditionalFilter {
 	}
 }
 
-func runTest(t *testing.T, filters []*prismgoclient.AdditionalFilter, inputString string, expected string) {
+func runTest(t *testing.T, filters []*prismgoclient.AdditionalFilter, inputString, expected string) {
+	t.Helper()
+
 	input := io.NopCloser(strings.NewReader(inputString))
 	baseSearchPaths := []string{"spec", "spec.resources"}
 	filteredBody, err := filter(input, filters, baseSearchPaths)
 	require.NoError(t, err)
-	actualBytes, _ := io.ReadAll(filteredBody)
+
+	actualBytes, err := io.ReadAll(filteredBody)
+	require.NoError(t, err)
+
 	actual := string(actualBytes)
 	assert.Equal(t, expected, actual)
 }
@@ -660,7 +706,7 @@ func TestDoWithFilters_filter(t *testing.T) {
 	input := fmt.Sprintf(`{"entities":[%s,%s,%s]}`, entity1, entity2, entity3)
 
 	filtersList := [][]*prismgoclient.AdditionalFilter{
-		getFilter("name", []string{"subnet-01", "subnet-03"}),
+		getFilter(testName, []string{"subnet-01", "subnet-03"}),
 		getFilter("vlan_id", []string{"111", "subnet-03"}),
 		getFilter("cluster_reference.uuid", []string{"111", "012345-112"}),
 	}
@@ -670,14 +716,14 @@ func TestDoWithFilters_filter(t *testing.T) {
 		removeWhiteSpace(fmt.Sprintf(`{"entities":[%s]}`, entity2)),
 	}
 
-	for i := 0; i < len(filtersList); i++ {
+	for i := range filtersList {
 		runTest(t, filtersList[i], input, expectedList[i])
 	}
 }
 
 func TestFilterDuplicateNames(t *testing.T) {
 	input := `{"entities":[{"name":"a"},{"name":"b"},{"name":"c"}],"metadata":{"length":3}}`
-	first := &prismgoclient.AdditionalFilter{Name: "name", Values: []string{"a", "b"}}
+	first := &prismgoclient.AdditionalFilter{Name: testName, Values: []string{"a", "b"}}
 	tests := []struct {
 		name     string
 		second   *prismgoclient.AdditionalFilter
@@ -690,12 +736,12 @@ func TestFilterDuplicateNames(t *testing.T) {
 		},
 		{
 			name:     "intersecting values",
-			second:   &prismgoclient.AdditionalFilter{Name: "name", Values: []string{"b", "c"}},
+			second:   &prismgoclient.AdditionalFilter{Name: testName, Values: []string{"b", "c"}},
 			expected: `{"entities":[{"name":"b"}],"metadata":{"length":3}}`,
 		},
 		{
 			name:     "disjoint values",
-			second:   &prismgoclient.AdditionalFilter{Name: "name", Values: []string{"c"}},
+			second:   &prismgoclient.AdditionalFilter{Name: testName, Values: []string{"c"}},
 			expected: `{"entities":null,"metadata":{"length":3}}`,
 		},
 	}
@@ -717,262 +763,184 @@ func TestFilterDuplicateNames(t *testing.T) {
 // Additional comprehensive tests for the specified methods
 
 func TestNewUnAuthRequest_ErrorCases(t *testing.T) {
-	t.Run("nil httpClient", func(t *testing.T) {
-		client := &Client{
-			ErrorMsg: "client error",
-		}
+	t.Run(testNilHTTPClient, func(t *testing.T) {
+		client := &Client{}
+		client.ErrorMsg = testClientError
 
-		req, err := client.NewUnAuthRequest("GET", "/test", nil)
-		assert.Error(t, err)
+		req, err := client.NewUnAuthRequest(http.MethodGet, testPath, nil)
+		require.Error(t, err)
 		assert.Nil(t, req)
-		assert.Contains(t, err.Error(), "client error")
+		assert.Contains(t, err.Error(), testClientError)
 	})
 
-	t.Run("different HTTP methods", func(t *testing.T) {
-		creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-		c, err := NewClient(
-			WithCredentials(creds),
-			WithUserAgent(testUserAgent),
-			WithAbsolutePath(testAbsolutePath),
-			WithBaseURL(creds.URL))
-		require.NoError(t, err)
+	t.Run(testHTTPMethods, func(t *testing.T) {
+		creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+		client := newTestClient(t, creds)
 
 		// Test different HTTP methods
-		methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
+		methods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch}
 		for _, method := range methods {
-			req, err := c.NewUnAuthRequest(method, "/test", nil)
-			assert.NoError(t, err)
+			req, err := client.NewUnAuthRequest(method, testPath, nil)
+			require.NoError(t, err)
 			assert.NotNil(t, req)
 			assert.Equal(t, method, req.Method)
 		}
 	})
 
 	t.Run("with body", func(t *testing.T) {
-		creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-		c, err := NewClient(
-			WithCredentials(creds),
-			WithUserAgent(testUserAgent),
-			WithAbsolutePath(testAbsolutePath),
-			WithBaseURL(creds.URL))
-		require.NoError(t, err)
+		creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+		client := newTestClient(t, creds)
 
-		body := map[string]interface{}{"key": "value"}
-		req, err := c.NewUnAuthRequest("POST", "/test", body)
-		assert.NoError(t, err)
+		body := map[string]any{testKey: testValue}
+		req, err := client.NewUnAuthRequest(http.MethodPost, testPath, body)
+		require.NoError(t, err)
 		assert.NotNil(t, req)
-		assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
+		assert.Equal(t, "application/json", req.Header.Get(testContentType))
 	})
 }
 
 func TestNewUnAuthFormEncodedRequest_ErrorCases(t *testing.T) {
-	t.Run("nil httpClient", func(t *testing.T) {
-		client := &Client{
-			ErrorMsg: "client error",
-		}
+	t.Run(testNilHTTPClient, func(t *testing.T) {
+		client := &Client{}
+		client.ErrorMsg = testClientError
 
-		body := map[string]string{"key": "value"}
-		req, err := client.NewUnAuthFormEncodedRequest("POST", "/test", body)
-		assert.Error(t, err)
+		body := map[string]string{testKey: testValue}
+		req, err := client.NewUnAuthFormEncodedRequest(http.MethodPost, testPath, body)
+		require.Error(t, err)
 		assert.Nil(t, req)
-		assert.Contains(t, err.Error(), "client error")
+		assert.Contains(t, err.Error(), testClientError)
 	})
 
-	t.Run("different HTTP methods", func(t *testing.T) {
-		creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-		c, err := NewClient(
-			WithCredentials(creds),
-			WithUserAgent(testUserAgent),
-			WithAbsolutePath(testAbsolutePath),
-			WithBaseURL(creds.URL))
-		require.NoError(t, err)
+	t.Run(testHTTPMethods, func(t *testing.T) {
+		creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+		client := newTestClient(t, creds)
 
-		body := map[string]string{"key": "value"}
+		body := map[string]string{testKey: testValue}
 		// Test different HTTP methods
-		methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
+		methods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch}
 		for _, method := range methods {
-			req, err := c.NewUnAuthFormEncodedRequest(method, "/test", body)
-			assert.NoError(t, err)
+			req, err := client.NewUnAuthFormEncodedRequest(method, testPath, body)
+			require.NoError(t, err)
 			assert.NotNil(t, req)
 			assert.Equal(t, method, req.Method)
 		}
 	})
 
 	t.Run("empty form data", func(t *testing.T) {
-		creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-		c, err := NewClient(
-			WithCredentials(creds),
-			WithUserAgent(testUserAgent),
-			WithAbsolutePath(testAbsolutePath),
-			WithBaseURL(creds.URL))
-		require.NoError(t, err)
+		creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+		client := newTestClient(t, creds)
 
 		body := map[string]string{}
-		req, err := c.NewUnAuthFormEncodedRequest("POST", "/test", body)
-		assert.NoError(t, err)
+		req, err := client.NewUnAuthFormEncodedRequest(http.MethodPost, testPath, body)
+		require.NoError(t, err)
 		assert.NotNil(t, req)
-		assert.Equal(t, "application/x-www-form-urlencoded", req.Header.Get("Content-Type"))
+		assert.Equal(t, "application/x-www-form-urlencoded", req.Header.Get(testContentType))
 	})
 }
 
+func legacyUploadFile(t *testing.T, content string) *os.File {
+	t.Helper()
+
+	created, err := os.CreateTemp(t.TempDir(), "test-upload")
+	require.NoError(t, err)
+
+	if content != "" {
+		_, err = created.WriteString(content)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, created.Close())
+
+	file, err := os.Open(created.Name())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, file.Close()) })
+
+	return file
+}
+
 func TestNewUploadRequest_ErrorCases(t *testing.T) {
-	t.Run("nil httpClient", func(t *testing.T) {
-		client := &Client{
-			ErrorMsg: "client error",
-		}
+	t.Run(testNilHTTPClient, func(t *testing.T) {
+		client := &Client{}
+		client.ErrorMsg = testClientError
 
-		// Create a temporary file
-		tmpFile, err := os.CreateTemp("", "test-upload")
-		require.NoError(t, err)
-		defer func() { _ = os.Remove(tmpFile.Name()) }()
-		_ = tmpFile.Close()
+		file := legacyUploadFile(t, "")
 
-		file, err := os.Open(tmpFile.Name())
-		require.NoError(t, err)
-		defer func() { _ = file.Close() }()
-
-		req, err := client.NewUploadRequest("POST", "/upload", file)
-		assert.Error(t, err)
+		req, err := client.NewUploadRequest(http.MethodPost, testUploadPath, file)
+		require.Error(t, err)
 		assert.Nil(t, req)
-		assert.Contains(t, err.Error(), "client error")
+		assert.Contains(t, err.Error(), testClientError)
 	})
 
-	t.Run("different HTTP methods", func(t *testing.T) {
-		creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-		c, err := NewClient(
-			WithCredentials(creds),
-			WithUserAgent(testUserAgent),
-			WithAbsolutePath(testAbsolutePath),
-			WithBaseURL(creds.URL))
-		require.NoError(t, err)
+	t.Run(testHTTPMethods, func(t *testing.T) {
+		creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+		client := newTestClient(t, creds)
 
-		// Create a temporary file
-		tmpFile, err := os.CreateTemp("", "test-upload")
-		require.NoError(t, err)
-		defer func() { _ = os.Remove(tmpFile.Name()) }()
-		_ = tmpFile.Close()
-
-		file, err := os.Open(tmpFile.Name())
-		require.NoError(t, err)
-		defer func() { _ = file.Close() }()
+		file := legacyUploadFile(t, "")
 
 		// Test different HTTP methods
-		methods := []string{"POST", "PUT", "PATCH"}
+		methods := []string{http.MethodPost, http.MethodPut, http.MethodPatch}
 		for _, method := range methods {
-			req, err := c.NewUploadRequest(method, "/upload", file)
-			assert.NoError(t, err)
+			req, err := client.NewUploadRequest(method, testUploadPath, file)
+			require.NoError(t, err)
 			assert.NotNil(t, req)
 			assert.Equal(t, method, req.Method)
 		}
 	})
 
 	t.Run("file with content", func(t *testing.T) {
-		creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-		c, err := NewClient(
-			WithCredentials(creds),
-			WithUserAgent(testUserAgent),
-			WithAbsolutePath(testAbsolutePath),
-			WithBaseURL(creds.URL))
-		require.NoError(t, err)
+		creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+		client := newTestClient(t, creds)
 
-		// Create a temporary file with content
-		tmpFile, err := os.CreateTemp("", "test-upload")
-		require.NoError(t, err)
-		defer func() { _ = os.Remove(tmpFile.Name()) }()
+		file := legacyUploadFile(t, "test content")
 
-		_, err = tmpFile.WriteString("test content")
+		req, err := client.NewUploadRequest(http.MethodPost, testUploadPath, file)
 		require.NoError(t, err)
-		_ = tmpFile.Close()
-
-		file, err := os.Open(tmpFile.Name())
-		require.NoError(t, err)
-		defer func() { _ = file.Close() }()
-
-		req, err := c.NewUploadRequest("POST", "/upload", file)
-		assert.NoError(t, err)
 		assert.NotNil(t, req)
-		assert.Equal(t, "application/octet-stream", req.Header.Get("Content-Type"))
-		assert.Contains(t, req.Header.Get("Authorization"), "Basic")
+		assert.Equal(t, "application/octet-stream", req.Header.Get(testContentType))
+		assert.Contains(t, req.Header.Get(testAuthorization), "Basic")
 	})
 }
 
 func TestNewUnAuthUploadRequest_ErrorCases(t *testing.T) {
-	t.Run("nil httpClient", func(t *testing.T) {
-		client := &Client{
-			ErrorMsg: "client error",
-		}
+	t.Run(testNilHTTPClient, func(t *testing.T) {
+		client := &Client{}
+		client.ErrorMsg = testClientError
 
-		// Create a temporary file
-		tmpFile, err := os.CreateTemp("", "test-upload")
-		require.NoError(t, err)
-		defer func() { _ = os.Remove(tmpFile.Name()) }()
-		_ = tmpFile.Close()
+		file := legacyUploadFile(t, "")
 
-		file, err := os.Open(tmpFile.Name())
-		require.NoError(t, err)
-		defer func() { _ = file.Close() }()
-
-		req, err := client.NewUnAuthUploadRequest("POST", "/upload", file)
-		assert.Error(t, err)
+		req, err := client.NewUnAuthUploadRequest(http.MethodPost, testUploadPath, file)
+		require.Error(t, err)
 		assert.Nil(t, req)
-		assert.Contains(t, err.Error(), "client error")
+		assert.Contains(t, err.Error(), testClientError)
 	})
 
-	t.Run("different HTTP methods", func(t *testing.T) {
-		creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-		c, err := NewClient(
-			WithCredentials(creds),
-			WithUserAgent(testUserAgent),
-			WithAbsolutePath(testAbsolutePath),
-			WithBaseURL(creds.URL))
-		require.NoError(t, err)
+	t.Run(testHTTPMethods, func(t *testing.T) {
+		creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+		client := newTestClient(t, creds)
 
-		// Create a temporary file
-		tmpFile, err := os.CreateTemp("", "test-upload")
-		require.NoError(t, err)
-		defer func() { _ = os.Remove(tmpFile.Name()) }()
-		_ = tmpFile.Close()
-
-		file, err := os.Open(tmpFile.Name())
-		require.NoError(t, err)
-		defer func() { _ = file.Close() }()
+		file := legacyUploadFile(t, "")
 
 		// Test different HTTP methods
-		methods := []string{"POST", "PUT", "PATCH"}
+		methods := []string{http.MethodPost, http.MethodPut, http.MethodPatch}
 		for _, method := range methods {
-			req, err := c.NewUnAuthUploadRequest(method, "/upload", file)
-			assert.NoError(t, err)
+			req, err := client.NewUnAuthUploadRequest(method, testUploadPath, file)
+			require.NoError(t, err)
 			assert.NotNil(t, req)
 			assert.Equal(t, method, req.Method)
 		}
 	})
 
 	t.Run("file with content", func(t *testing.T) {
-		creds := &prismgoclient.Credentials{URL: "foo.com", Username: "username", Password: "password", Insecure: true}
-		c, err := NewClient(
-			WithCredentials(creds),
-			WithUserAgent(testUserAgent),
-			WithAbsolutePath(testAbsolutePath),
-			WithBaseURL(creds.URL))
-		require.NoError(t, err)
+		creds := &prismgoclient.Credentials{URL: testHost, Username: testUsername, Password: testPassword, Insecure: true}
+		client := newTestClient(t, creds)
 
-		// Create a temporary file with content
-		tmpFile, err := os.CreateTemp("", "test-upload")
-		require.NoError(t, err)
-		defer func() { _ = os.Remove(tmpFile.Name()) }()
+		file := legacyUploadFile(t, "test content")
 
-		_, err = tmpFile.WriteString("test content")
+		req, err := client.NewUnAuthUploadRequest(http.MethodPost, testUploadPath, file)
 		require.NoError(t, err)
-		_ = tmpFile.Close()
-
-		file, err := os.Open(tmpFile.Name())
-		require.NoError(t, err)
-		defer func() { _ = file.Close() }()
-
-		req, err := c.NewUnAuthUploadRequest("POST", "/upload", file)
-		assert.NoError(t, err)
 		assert.NotNil(t, req)
-		assert.Equal(t, "application/octet-stream", req.Header.Get("Content-Type"))
-		assert.Empty(t, req.Header.Get("Authorization"))
+		assert.Equal(t, "application/octet-stream", req.Header.Get(testContentType))
+		assert.Empty(t, req.Header.Get(testAuthorization))
 	})
 }
 
@@ -982,10 +950,11 @@ func TestDecorateRequestWithAuthHeaders_ServiceAccountModes(t *testing.T) {
 		creds := &prismgoclient.Credentials{
 			APIKey: "explicit-api-key",
 		}
-		req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", http.NoBody)
+		require.NoError(t, err)
 		decorateRequestWithAuthHeaders(req, creds)
 		assert.Equal(t, "explicit-api-key", req.Header.Get(ntnxAPIKeyHeaderKey))
-		assert.Empty(t, req.Header.Get("Authorization"))
+		assert.Empty(t, req.Header.Get(testAuthorization))
 	}
 	// 2) Username is API token header key, Password is APIKey
 	{
@@ -993,141 +962,117 @@ func TestDecorateRequestWithAuthHeaders_ServiceAccountModes(t *testing.T) {
 			Username: ntnxAPIKeyHeaderKey,
 			Password: "password-as-api-key",
 		}
-		req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", http.NoBody)
+		require.NoError(t, err)
 		decorateRequestWithAuthHeaders(req, creds)
 		assert.Equal(t, "password-as-api-key", req.Header.Get(ntnxAPIKeyHeaderKey))
-		assert.Empty(t, req.Header.Get("Authorization"))
+		assert.Empty(t, req.Header.Get(testAuthorization))
 	}
 	// 3) Normal basic auth should remain unchanged
 	{
 		creds := &prismgoclient.Credentials{
-			Username: "username",
-			Password: "password",
+			Username: testUsername,
+			Password: testPassword,
 		}
-		req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", http.NoBody)
+		require.NoError(t, err)
 		decorateRequestWithAuthHeaders(req, creds)
 		assert.Empty(t, req.Header.Get(ntnxAPIKeyHeaderKey))
-		auth := req.Header.Get("Authorization")
+		auth := req.Header.Get(testAuthorization)
 		assert.True(t, strings.HasPrefix(auth, "Basic "))
 	}
 }
 
-func TestDoWithFilters_ErrorCases(t *testing.T) {
-	t.Run("nil httpClient", func(t *testing.T) {
-		client := &Client{
-			ErrorMsg: "client error",
-		}
+type filterResponseFixture struct {
+	name    string
+	payload string
+	status  int
+	filters []*prismgoclient.AdditionalFilter
+	paths   []string
+}
 
-		req, err := http.NewRequest("GET", "http://test.com", nil)
-		require.NoError(t, err)
-
-		var result map[string]interface{}
-		err = client.DoWithFilters(context.Background(), req, &result, nil, nil)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "client error")
-	})
-
-	t.Run("successful request with filters", func(t *testing.T) {
-		mux, client, server := setup(t)
-		defer server.Close()
-
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{
+func filterResponseFixtures() []filterResponseFixture {
+	return []filterResponseFixture{
+		{
+			name: "successful request with filters", payload: `{
 				"entities": [
 					{"name": "entity1", "type": "type1"},
 					{"name": "entity2", "type": "type2"}
 				]
-			}`))
-		})
-
-		req, err := client.NewRequest("GET", "/", nil)
-		require.NoError(t, err)
-
-		filters := []*prismgoclient.AdditionalFilter{
-			{Name: "type", Values: []string{"type1"}},
-		}
-
-		var result map[string]interface{}
-		err = client.DoWithFilters(context.Background(), req, &result, filters, []string{"$."})
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-
-	t.Run("request with error response", func(t *testing.T) {
-		mux, client, server := setup(t)
-		defer server.Close()
-
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(`{
+			}`, status: http.StatusOK,
+			filters: []*prismgoclient.AdditionalFilter{{Name: "type", Values: []string{"type1"}}}, paths: []string{"$."},
+		},
+		{
+			name: "request with error response", payload: `{
 				"status": {
 					"state": "ERROR",
 					"message_list": [
 						{"message": "Bad request", "reason": "invalid_input"}
 					]
 				}
-			}`))
-		})
-
-		req, err := client.NewRequest("GET", "/", nil)
-		require.NoError(t, err)
-
-		var result map[string]interface{}
-		err = client.DoWithFilters(context.Background(), req, &result, nil, nil)
-		assert.Error(t, err)
-		var responseError *prismgoclient.ResponseError
-		if !errors.As(err, &responseError) || responseError.StatusCode != http.StatusBadRequest {
-			t.Errorf("error = %v, expected typed HTTP 400", err)
-		}
-	})
-
-	t.Run("request with nil filters", func(t *testing.T) {
-		mux, client, server := setup(t)
-		defer server.Close()
-
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{
+			}`, status: http.StatusBadRequest,
+			filters: nil, paths: nil,
+		},
+		{
+			name: "request with nil filters", payload: `{
 				"entities": [
 					{"name": "entity1", "type": "type1"}
 				]
-			}`))
-		})
-
-		req, err := client.NewRequest("GET", "/", nil)
-		require.NoError(t, err)
-
-		var result map[string]interface{}
-		err = client.DoWithFilters(context.Background(), req, &result, nil, nil)
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-
-	t.Run("request with empty baseSearchPaths", func(t *testing.T) {
-		mux, client, server := setup(t)
-		defer server.Close()
-
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, err := w.Write([]byte(`{
+			}`, status: http.StatusOK,
+			filters: nil, paths: nil,
+		},
+		{
+			name: "request with empty baseSearchPaths", payload: `{
 				"entities": [
 					{"name": "entity1", "type": "type1"}
 				]
-			}`))
+			}`, status: http.StatusOK,
+			filters: []*prismgoclient.AdditionalFilter{{Name: "type", Values: []string{"type1"}}}, paths: []string{},
+		},
+	}
+}
+
+func TestDoWithFilters_ErrorCases(t *testing.T) {
+	t.Run(testNilHTTPClient, func(t *testing.T) {
+		client := &Client{}
+		client.ErrorMsg = testClientError
+
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://test.com", http.NoBody)
+		require.NoError(t, err)
+		require.NoError(t, err)
+
+		var result map[string]any
+
+		err = client.DoWithFilters(context.Background(), req, &result, nil, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), testClientError)
+	})
+
+	for _, fixture := range filterResponseFixtures() {
+		t.Run(fixture.name, func(t *testing.T) {
+			mux, client, server := setup(t)
+			defer server.Close()
+
+			mux.HandleFunc(testRootPath, func(writer http.ResponseWriter, _ *http.Request) {
+				writer.WriteHeader(fixture.status)
+				writeTestResponse(t, writer, fixture.payload)
+			})
+			req, err := client.NewRequest(http.MethodGet, testRootPath, nil)
 			require.NoError(t, err)
+
+			var result map[string]any
+
+			err = client.DoWithFilters(context.Background(), req, &result, fixture.filters, fixture.paths)
+			if fixture.status == http.StatusBadRequest {
+				require.Error(t, err)
+
+				var responseError *prismgoclient.ResponseError
+				require.ErrorAs(t, err, &responseError)
+				assert.Equal(t, http.StatusBadRequest, responseError.StatusCode)
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, result)
+			}
 		})
-
-		req, err := client.NewRequest("GET", "/", nil)
-		require.NoError(t, err)
-
-		filters := []*prismgoclient.AdditionalFilter{
-			{Name: "type", Values: []string{"type1"}},
-		}
-
-		var result map[string]interface{}
-		err = client.DoWithFilters(context.Background(), req, &result, filters, []string{})
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-	})
+	}
 }
