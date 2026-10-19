@@ -542,7 +542,7 @@ func (c *Client) Do(ctx context.Context, req *http.Request, result any) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func(body io.ReadCloser) { _ = body.Close() }(resp.Body)
 
 	if responseErr := CheckResponse(resp); responseErr != nil {
 		return responseErr
@@ -810,7 +810,7 @@ func (c *Client) refreshCookies(ctx context.Context) error {
 		return err
 	}
 
-	defer resp.Body.Close()
+	defer func(body io.ReadCloser) { _ = body.Close() }(resp.Body)
 
 	if responseErr := CheckResponse(resp); responseErr != nil {
 		return responseErr
