@@ -202,7 +202,8 @@ func TestNewRequest(t *testing.T) {
 	inURL, outURL := "/foo", fmt.Sprintf(defaultBaseURL+testAbsolutePath+"/foo", "https", "foo.com")
 	inBody, outBody := map[string]interface{}{"name": "bar"}, `{"name":"bar"}`+"\n"
 
-	req, _ := c.NewRequest(http.MethodPost, inURL, inBody)
+	req, err := c.NewRequest(http.MethodPost, inURL, inBody)
+	require.NoError(t, err)
 
 	// test relative URL was expanded
 	if req.URL.String() != outURL {
@@ -210,7 +211,8 @@ func TestNewRequest(t *testing.T) {
 	}
 
 	// test body was JSON encoded
-	body, _ := io.ReadAll(req.Body)
+	body, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
 	if string(body) != outBody {
 		t.Errorf("NewRequest(%v) Body = %v, expected %v", inBody, string(body), outBody)
 	}
@@ -228,10 +230,12 @@ func TestNewUploadRequest(t *testing.T) {
 	inURL, outURL := "/foo", fmt.Sprintf(defaultBaseURL+testAbsolutePath+"/foo", SchemeHTTPS, "foo.com")
 	inBody, err := os.Open(fileName)
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, inBody.Close()) })
 
 	// expected body
 	out, err := os.Open(fileName)
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, out.Close()) })
 	outBody, err := io.ReadAll(out)
 	require.NoError(t, err)
 
@@ -267,7 +271,8 @@ func TestNewUnAuthRequest(t *testing.T) {
 	inURL, outURL := "/foo", fmt.Sprintf(defaultBaseURL+testAbsolutePath+"/foo", SchemeHTTPS, "foo.com")
 	inBody, outBody := map[string]interface{}{"name": "bar"}, `{"name":"bar"}`+"\n"
 
-	req, _ := c.NewUnAuthRequest(http.MethodPost, inURL, inBody)
+	req, err := c.NewUnAuthRequest(http.MethodPost, inURL, inBody)
+	require.NoError(t, err)
 
 	// test relative URL was expanded
 	if req.URL.String() != outURL {
@@ -275,7 +280,8 @@ func TestNewUnAuthRequest(t *testing.T) {
 	}
 
 	// test body was JSON encoded
-	body, _ := io.ReadAll(req.Body)
+	body, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
 	if string(body) != outBody {
 		t.Errorf("NewUnAuthRequest(%v) Body = %v, expected %v", inBody, string(body), outBody)
 	}
@@ -309,7 +315,8 @@ func TestNewUnAuthFormEncodedRequest(t *testing.T) {
 	inBody := map[string]string{"name": "bar", "fullname": "foobar"}
 	outBody := map[string][]string{"name": {"bar"}, "fullname": {"foobar"}}
 
-	req, _ := c.NewUnAuthFormEncodedRequest(http.MethodPost, inURL, inBody)
+	req, err := c.NewUnAuthFormEncodedRequest(http.MethodPost, inURL, inBody)
+	require.NoError(t, err)
 
 	// test relative URL was expanded
 	if req.URL.String() != outURL {
@@ -319,9 +326,7 @@ func TestNewUnAuthFormEncodedRequest(t *testing.T) {
 	// test body
 	// Parse the body form data to a map structure which can be accessed by req.PostForm
 	err = req.ParseForm()
-	if err != nil {
-		t.Errorf("unable to parse body form data to map: %s", err)
-	}
+	require.NoError(t, err)
 
 	// check form encoded key-values as compared to input values
 	if !reflect.DeepEqual(outBody, (map[string][]string)(req.PostForm)) {
@@ -354,26 +359,27 @@ func TestNewUnAuthUploadRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	inURL, outURL := "/foo", fmt.Sprintf(defaultBaseURL+testAbsolutePath+"/foo", SchemeHTTPS, "foo.com")
-	inBody, _ := os.Open(fileName)
-	if err != nil {
-		t.Fatalf("Error opening fiele %v, error : %v", fileName, err)
-	}
+	inBody, err := os.Open(fileName)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, inBody.Close()) })
 
 	// expected body
-	out, _ := os.Open(fileName)
-	outBody, _ := io.ReadAll(out)
+	out, err := os.Open(fileName)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, out.Close()) })
+	outBody, err := io.ReadAll(out)
+	require.NoError(t, err)
 
 	req, err := c.NewUnAuthUploadRequest(http.MethodPost, inURL, inBody)
-	if err != nil {
-		t.Fatalf("NewUnAuthUploadRequest() errored out with error : %v", err.Error())
-	}
+	require.NoError(t, err)
 	// test relative URL was expanded
 	if req.URL.String() != outURL {
 		t.Errorf("NewUnAuthUploadRequest(%v) URL = %v, expected %v", inURL, req.URL, outURL)
 	}
 
 	// test body contents
-	got, _ := io.ReadAll(req.Body)
+	got, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
 	if !bytes.Equal(got, outBody) {
 		t.Errorf("NewUnAuthUploadRequest(%v) Body = %v, expected %v", inBody, string(got), string(outBody))
 	}
