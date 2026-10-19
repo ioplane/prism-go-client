@@ -391,8 +391,15 @@ func TestOperations_UploadImage(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/images/cfde831a-4e87-4a75-960f-89b0148aa2cc/file", func(_ http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPut)
 
-		bodyBytes, _ := io.ReadAll(r.Body)
-		file, _ := os.ReadFile("v3.go")
+		bodyBytes, err := io.ReadAll(r.Body)
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		file, err := os.ReadFile("v3.go")
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		if !reflect.DeepEqual(bodyBytes, file) {
 			t.Errorf("Operations.UploadImage() error: different uploaded files")
