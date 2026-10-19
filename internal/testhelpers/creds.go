@@ -1,3 +1,4 @@
+// Package testhelpers provides developer credentials for SDK tests.
 package testhelpers
 
 import (
@@ -26,12 +27,12 @@ const (
 )
 
 type prismCentral struct {
-	Endpoint           string `yaml:"endpoint"`
-	Port               string `yaml:"port"`
-	Username           string `yaml:"username"`
-	Password           string `yaml:"password"`
-	APIKey             string `yaml:"apiKey"`
-	Insecure           bool   `yaml:"insecure"`
+	Endpoint              string `yaml:"endpoint"`
+	Port                  string `yaml:"port"`
+	Username              string `yaml:"username"`
+	Password              string `yaml:"password"`
+	APIKey                string `yaml:"apiKey"`
+	Insecure              bool   `yaml:"insecure"`
 	AdditionalTrustBundle string `yaml:"additionalTrustBundle"`
 }
 
@@ -45,7 +46,8 @@ func prismDevConfigFilePath() (string, error) {
 	prismDevConfigFilePath, ok := os.LookupEnv(prismDevConfigFileEnvVar)
 	if ok {
 		if _, err := os.Stat(prismDevConfigFilePath); err != nil {
-			return "", fmt.Errorf("unable to find developer config file %q mentioned in environment variable %q: %w", prismDevConfigFilePath, prismDevConfigFileEnvVar, err)
+			return "", fmt.Errorf("unable to find developer config file %q mentioned in environment variable %q: %w",
+				prismDevConfigFilePath, prismDevConfigFileEnvVar, err)
 		}
 
 		path, err := filepath.Abs(prismDevConfigFilePath)
@@ -67,26 +69,33 @@ func prismDevConfigFilePath() (string, error) {
 func dummyDeveloperConfig() devConf {
 	return devConf{
 		PrismCentral: prismCentral{
-			Endpoint: nutanixEndpointDummyValue,
-			Port:     nutanixPortDummyValue,
-			Username: nutanixUsernameDummyValue,
-			Password: nutanixPasswordDummyValue,
-			Insecure: nutanixInsecureDummyValue,
+			Endpoint:              nutanixEndpointDummyValue,
+			Port:                  nutanixPortDummyValue,
+			Username:              nutanixUsernameDummyValue,
+			Password:              nutanixPasswordDummyValue,
+			Insecure:              nutanixInsecureDummyValue,
+			APIKey:                "",
+			AdditionalTrustBundle: "",
 		},
 	}
 }
 
 func getDeveloperConfig(t *testing.T, filePath string) devConf {
+	t.Helper()
+
 	conf := dummyDeveloperConfig()
+
 	bytes, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Log("unable to read developer config file, using dummy values")
+
 		return conf
 	}
 
 	dConf := devConf{}
 	if err := yaml.Unmarshal(bytes, &dConf); err != nil {
 		t.Log("unable to unmarshal developer config file, using dummy values")
+
 		return conf
 	}
 
@@ -99,21 +108,31 @@ func getDeveloperConfig(t *testing.T, filePath string) devConf {
 // Alternatively, the path to the developer config file can be set in the environment variable `PRISM_DEV_CONFIG`.
 // More information about the developer config file can be found in the DEVELOPMENT.md in repo root.
 func CredentialsFromEnvironment(t *testing.T) prismgoclient.Credentials {
+	t.Helper()
+
 	endpoint := ManagementEndpointFromEnvironment(t)
 
 	return prismgoclient.Credentials{
-		Endpoint: endpoint.Address.Host,
-		Port:     endpoint.Address.Port(),
-		URL:      endpoint.Address.String(),
-		APIKey:   endpoint.APIKey,
-		Username: endpoint.Username,
-		Password: endpoint.Password,
-		Insecure: endpoint.Insecure,
+		Endpoint:              endpoint.Address.Host,
+		Port:                  endpoint.Address.Port(),
+		URL:                   endpoint.Address.String(),
+		APIKey:                endpoint.APIKey,
+		Username:              endpoint.Username,
+		Password:              endpoint.Password,
+		Insecure:              endpoint.Insecure,
+		SessionAuth:           false,
+		AdditionalTrustBundle: "",
+		ProxyURL:              "",
+		FoundationEndpoint:    "",
+		FoundationPort:        "",
+		RequiredFields:        nil,
 	}
 }
 
-// ManagementEndpointFromEnvironment returns a ManagementEndpoint object from the developer environment
+// ManagementEndpointFromEnvironment returns a ManagementEndpoint object from the developer environment.
 func ManagementEndpointFromEnvironment(t *testing.T) *types.ManagementEndpoint {
+	t.Helper()
+
 	confFile, err := prismDevConfigFilePath()
 	require.NoError(t, err)
 	conf := getDeveloperConfig(t, confFile)
@@ -127,6 +146,7 @@ func ManagementEndpointFromEnvironment(t *testing.T) *types.ManagementEndpoint {
 	t.Setenv("NUTANIX_PASSWORD", conf.PrismCentral.Password)
 	t.Setenv("NUTANIX_API_KEY", conf.PrismCentral.APIKey)
 	t.Setenv("NUTANIX_INSECURE", strconv.FormatBool(conf.PrismCentral.Insecure))
+
 	endpoint, err := local.NewProvider().GetManagementEndpoint(nil)
 	require.NoError(t, err)
 

@@ -13,5 +13,5 @@ func TestCredentialsFromEnvironment(t *testing.T) {
 	assert.Equal(t, "https://prism.nutanix.com:9440", creds.URL)
 	assert.Equal(t, "some_user", creds.Username)
 	assert.Equal(t, "some_password", creds.Password)
-	assert.Equal(t, true, creds.Insecure)
+	assert.True(t, creds.Insecure)
 }
