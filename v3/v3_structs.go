@@ -15,7 +15,7 @@ type Reference struct {
 	UUID *string `json:"uuid" mapstructure:"uuid"`
 }
 
-// VMVnumaConfig Indicates how VM vNUMA should be configured
+// VMVnumaConfig Indicates how VM vNUMA should be configured.
 type VMVnumaConfig struct {
 	// Number of vNUMA nodes. 0 means vNUMA is disabled.
 	NumVnumaNodes *int64 `json:"num_vnuma_nodes,omitempty" mapstructure:"num_vnuma_nodes,omitempty"`
@@ -300,7 +300,7 @@ type VMResources struct {
 	HardwareVirtualizationEnabled *bool `json:"hardware_virtualization_enabled,omitempty" mapstructure:"hardware_virtualization_enabled,omitempty"`
 }
 
-// VM An intentful representation of a vm spec
+// VM An intentful representation of a vm spec.
 type VM struct {
 	AvailabilityZoneReference *Reference `json:"availability_zone_reference,omitempty" mapstructure:"availability_zone_reference,omitempty"`
 
@@ -327,7 +327,7 @@ type VMIntentInput struct {
 // MessageResource ...
 type MessageResource struct {
 	// Custom key-value details relevant to the status.
-	Details interface{} `json:"details,omitempty" mapstructure:"details,omitempty"`
+	Details any `json:"details,omitempty" mapstructure:"details,omitempty"`
 
 	// If state is ERROR, a message describing the error.
 	Message *string `json:"message" mapstructure:"message"`
@@ -538,7 +538,7 @@ type VMResourcesDefStatus struct {
 	HardwareVirtualizationEnabled *bool `json:"hardware_virtualization_enabled,omitempty" mapstructure:"hardware_virtualization_enabled,omitempty"`
 }
 
-// VMDefStatus An intentful representation of a vm status
+// VMDefStatus An intentful representation of a vm status.
 type VMDefStatus struct {
 	AvailabilityZoneReference *Reference `json:"availability_zone_reference,omitempty" mapstructure:"availability_zone_reference,omitempty"`
 
@@ -563,10 +563,10 @@ type VMDefStatus struct {
 
 // ExecutionContext ...
 type ExecutionContext struct {
-	TaskUUID interface{} `json:"task_uuid,omitempty" mapstructure:"task_uuid,omitempty"`
+	TaskUUID any `json:"task_uuid,omitempty" mapstructure:"task_uuid,omitempty"`
 }
 
-// VMIntentResponse Response object for intentful operations on a vm
+// VMIntentResponse Response object for intentful operations on a vm.
 type VMIntentResponse struct {
 	APIVersion *string `json:"api_version" mapstructure:"api_version"`
 
@@ -577,7 +577,7 @@ type VMIntentResponse struct {
 	Status *VMDefStatus `json:"status,omitempty" mapstructure:"status,omitempty"`
 }
 
-// DSMetadata All api calls that return a list will have this metadata block as input
+// DSMetadata All api calls that return a list will have this metadata block as input.
 type DSMetadata struct {
 	// The filter in FIQL syntax used for the results.
 	Filter *string `json:"filter,omitempty" mapstructure:"filter,omitempty"`
@@ -601,7 +601,7 @@ type DSMetadata struct {
 	ClientSideFilters []*prismgoclient.AdditionalFilter `json:"-"`
 }
 
-// VMIntentResource Response object for intentful operations on a vm
+// VMIntentResource Response object for intentful operations on a vm.
 type VMIntentResource struct {
 	APIVersion *string `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 
@@ -612,7 +612,7 @@ type VMIntentResource struct {
 	Status *VMDefStatus `json:"status,omitempty" mapstructure:"status,omitempty"`
 }
 
-// VMListIntentResponse Response object for intentful operation of vms
+// VMListIntentResponse Response object for intentful operation of vms.
 type VMListIntentResponse struct {
 	APIVersion *string `json:"api_version" mapstructure:"api_version"`
 
@@ -621,7 +621,7 @@ type VMListIntentResponse struct {
 	Metadata *ListMetadataOutput `json:"metadata" mapstructure:"metadata"`
 }
 
-// SubnetIntentInput An intentful representation of a subnet
+// SubnetIntentInput An intentful representation of a subnet.
 type SubnetIntentInput struct {
 	APIVersion *string `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 
@@ -630,7 +630,7 @@ type SubnetIntentInput struct {
 	Spec *models.Subnet `json:"spec" mapstructure:"spec"`
 }
 
-// SubnetIntentResponse represents the response object for intentful operations on a subnet
+// SubnetIntentResponse represents the response object for intentful operations on a subnet.
 type SubnetIntentResponse struct {
 	APIVersion *string `json:"api_version" mapstructure:"api_version"`
 
@@ -641,7 +641,7 @@ type SubnetIntentResponse struct {
 	Status *models.SubnetDefStatus `json:"status,omitempty" mapstructure:"status,omitempty"`
 }
 
-// SubnetIntentResource represents Response object for intentful operations on a subnet
+// SubnetIntentResource represents Response object for intentful operations on a subnet.
 type SubnetIntentResource struct {
 	APIVersion *string `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 
@@ -652,7 +652,7 @@ type SubnetIntentResource struct {
 	Status *models.SubnetDefStatus `json:"status,omitempty" mapstructure:"status,omitempty"`
 }
 
-// SubnetListIntentResponse represents the response object for intentful operation of subnets
+// SubnetListIntentResponse represents the response object for intentful operation of subnets.
 type SubnetListIntentResponse struct {
 	APIVersion *string `json:"api_version" mapstructure:"api_version"`
 
@@ -682,7 +682,7 @@ type SubnetListMetadata struct {
 	SortOrder *string `json:"sort_order,omitempty" mapstructure:"sort_order,omitempty"`
 }
 
-// Checksum represents the image checksum
+// Checksum represents the image checksum.
 type Checksum struct {
 	ChecksumAlgorithm *string `json:"checksum_algorithm" mapstructure:"checksum_algorithm"`
 	ChecksumValue     *string `json:"checksum_value" mapstructure:"checksum_value"`
@@ -722,7 +722,7 @@ type ImageResources struct {
 	DataSourceReference *Reference `json:"data_source_reference,omitempty" mapstructure:"data_source_reference,omitempty"`
 }
 
-// Image An intentful representation of a image spec
+// Image An intentful representation of a image spec.
 type Image struct {
 	// A description for image.
 	Description *string `json:"description,omitempty" mapstructure:"description,omitempty"`
@@ -733,7 +733,7 @@ type Image struct {
 	Resources *ImageResources `json:"resources" mapstructure:"resources"`
 }
 
-// ImageMetadata Metadata The image kind metadata
+// ImageMetadata Metadata The image kind metadata.
 type ImageMetadata struct {
 	// Categories for the image
 	Categories map[string]string `json:"categories,omitempty" mapstructure:"categories,omitempty"`
@@ -765,7 +765,7 @@ type ImageMetadata struct {
 	UUID *string `json:"uuid,omitempty" mapstructure:"uuid,omitempty"`
 }
 
-// ImageIntentInput An intentful representation of a image
+// ImageIntentInput An intentful representation of a image.
 type ImageIntentInput struct {
 	APIVersion *string `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 
@@ -829,7 +829,7 @@ type ImageResourcesDefStatus struct {
 	Version *ImageVersionStatus `json:"version,omitempty" mapstructure:"version,omitempty"`
 }
 
-// ImageDefStatus represents an intentful representation of a image status
+// ImageDefStatus represents an intentful representation of a image status.
 type ImageDefStatus struct {
 	AvailabilityZoneReference *Reference `json:"availability_zone_reference,omitempty" mapstructure:"availability_zone_reference,omitempty"`
 
@@ -852,7 +852,7 @@ type ImageDefStatus struct {
 	ExecutionContext *ExecutionContext `json:"execution_context,omitempty" mapstructure:"execution_context,omitempty"`
 }
 
-// ImageIntentResponse represents the response object for intentful operations on a image
+// ImageIntentResponse represents the response object for intentful operations on a image.
 type ImageIntentResponse struct {
 	APIVersion *string `json:"api_version" mapstructure:"api_version"`
 
@@ -863,7 +863,7 @@ type ImageIntentResponse struct {
 	Status *ImageDefStatus `json:"status,omitempty" mapstructure:"status,omitempty"`
 }
 
-// ImageListMetadata represents metadata input
+// ImageListMetadata represents metadata input.
 type ImageListMetadata struct {
 	// The filter in FIQL syntax used for the results.
 	Filter *string `json:"filter,omitempty" mapstructure:"filter,omitempty"`
@@ -884,7 +884,7 @@ type ImageListMetadata struct {
 	SortOrder *string `json:"sort_order,omitempty" mapstructure:"sort_order,omitempty"`
 }
 
-// ImageIntentResource represents the response object for intentful operations on a image
+// ImageIntentResource represents the response object for intentful operations on a image.
 type ImageIntentResource struct {
 	APIVersion *string `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 
@@ -895,7 +895,7 @@ type ImageIntentResource struct {
 	Status *ImageDefStatus `json:"status,omitempty" mapstructure:"status,omitempty"`
 }
 
-// ImageListIntentResponse represents the response object for intentful operation of images
+// ImageListIntentResponse represents the response object for intentful operation of images.
 type ImageListIntentResponse struct {
 	APIVersion *string `json:"api_version" mapstructure:"api_version"`
 
@@ -904,14 +904,14 @@ type ImageListIntentResponse struct {
 	Metadata *ListMetadataOutput `json:"metadata" mapstructure:"metadata"`
 }
 
-// ClusterListIntentResponse represents the response object for list operation of clusters
+// ClusterListIntentResponse represents the response object for list operation of clusters.
 type ClusterListIntentResponse struct {
 	APIVersion *string                  `json:"api_version" mapstructure:"api_version"`
 	Entities   []*ClusterIntentResponse `json:"entities,omitempty" mapstructure:"entities,omitempty"`
 	Metadata   *ListMetadataOutput      `json:"metadata" mapstructure:"metadata"`
 }
 
-// ClusterIntentResponse is the response object for intentful operations on a cluster
+// ClusterIntentResponse is the response object for intentful operations on a cluster.
 type ClusterIntentResponse struct {
 	APIVersion *string `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 
@@ -922,7 +922,7 @@ type ClusterIntentResponse struct {
 	Status *models.ClusterDefStatus `json:"status,omitempty" mapstructure:"status,omitempty"`
 }
 
-// CategoryListMetadata All api calls that return a list will have this metadata block as input
+// CategoryListMetadata All api calls that return a list will have this metadata block as input.
 type CategoryListMetadata struct {
 	// The filter in FIQL syntax used for the results.
 	Filter *string `json:"filter,omitempty" mapstructure:"filter,omitempty"`
@@ -1209,7 +1209,7 @@ type NetworkSecurityRule struct {
 	Resources   *NetworkSecurityRuleResources `json:"resources,omitempty" `
 }
 
-// Metadata Metadata The kind metadata
+// Metadata The kind metadata.
 type Metadata struct {
 	LastUpdateTime   *time.Time        `json:"last_update_time,omitempty" mapstructure:"last_update_time,omitempty"`   //
 	Kind             *string           `json:"kind" mapstructure:"kind"`                                               //
@@ -1230,14 +1230,14 @@ type Metadata struct {
 	UseCategoriesMapping *bool               `json:"use_categories_mapping,omitempty" mapstructure:"use_categories_mapping,omitempty"`
 }
 
-// NetworkSecurityRuleIntentInput An intentful representation of a network_security_rule
+// NetworkSecurityRuleIntentInput An intentful representation of a network_security_rule.
 type NetworkSecurityRuleIntentInput struct {
 	APIVersion *string              `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 	Metadata   *Metadata            `json:"metadata" mapstructure:"metadata"`
 	Spec       *NetworkSecurityRule `json:"spec" mapstructure:"spec"`
 }
 
-// NetworkSecurityRuleDefStatus ... Network security rule status
+// NetworkSecurityRuleDefStatus ... Network security rule status.
 type NetworkSecurityRuleDefStatus struct {
 	Resources        *NetworkSecurityRuleResources `json:"resources,omitempty" mapstructure:"resources,omitempty"`
 	State            *string                       `json:"state,omitempty" mapstructure:"state,omitempty"`
@@ -1246,7 +1246,7 @@ type NetworkSecurityRuleDefStatus struct {
 	Description      *string                       `json:"description,omitempty" mapstructure:"description,omitempty"`
 }
 
-// NetworkSecurityRuleIntentResponse Response object for intentful operations on a network_security_rule
+// NetworkSecurityRuleIntentResponse Response object for intentful operations on a network_security_rule.
 type NetworkSecurityRuleIntentResponse struct {
 	APIVersion *string                       `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 	Metadata   *Metadata                     `json:"metadata" mapstructure:"metadata"`
@@ -1263,7 +1263,7 @@ type NetworkSecurityRuleStatus struct {
 	State       *string            `json:"state,omitempty" mapstructure:"state,omitempty"`
 }
 
-// ListMetadata All api calls that return a list will have this metadata block as input
+// ListMetadata All api calls that return a list will have this metadata block as input.
 type ListMetadata struct {
 	Filter        *string `json:"filter,omitempty" mapstructure:"filter,omitempty"`                 // The filter in FIQL syntax used for the results.
 	Kind          *string `json:"kind,omitempty" mapstructure:"kind,omitempty"`                     // The kind name
@@ -1273,7 +1273,7 @@ type ListMetadata struct {
 	SortOrder     *string `json:"sort_order,omitempty" mapstructure:"sort_order,omitempty"`         // The sort order in which results are returned
 }
 
-// ListMetadataOutput All api calls that return a list will have this metadata block
+// ListMetadataOutput All api calls that return a list will have this metadata block.
 type ListMetadataOutput struct {
 	Filter        *string `json:"filter,omitempty" mapstructure:"filter,omitempty"`                 // The filter used for the results
 	Kind          *string `json:"kind,omitempty" mapstructure:"kind,omitempty"`                     // The kind name
@@ -1284,7 +1284,7 @@ type ListMetadataOutput struct {
 	TotalMatches  *int64  `json:"total_matches,omitempty" mapstructure:"total_matches,omitempty"`   // Total matches found
 }
 
-// NetworkSecurityRuleIntentResource ... Response object for intentful operations on a network_security_rule
+// NetworkSecurityRuleIntentResource ... Response object for intentful operations on a network_security_rule.
 type NetworkSecurityRuleIntentResource struct {
 	APIVersion *string                       `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 	Metadata   *Metadata                     `json:"metadata,omitempty" mapstructure:"metadata,omitempty"`
@@ -1292,14 +1292,14 @@ type NetworkSecurityRuleIntentResource struct {
 	Status     *NetworkSecurityRuleDefStatus `json:"status,omitempty" mapstructure:"status,omitempty"`
 }
 
-// NetworkSecurityRuleListIntentResponse Response object for intentful operation of network_security_rules
+// NetworkSecurityRuleListIntentResponse Response object for intentful operation of network_security_rules.
 type NetworkSecurityRuleListIntentResponse struct {
 	APIVersion string                               `json:"api_version" mapstructure:"api_version"`
 	Entities   []*NetworkSecurityRuleIntentResource `json:"entities,omitempty" bson:"entities,omitempty" mapstructure:"entities,omitempty"`
 	Metadata   *ListMetadataOutput                  `json:"metadata" mapstructure:"metadata"`
 }
 
-// VolumeGroupInput Represents the request body for create volume_grop request
+// VolumeGroupInput Represents the request body for create volume_grop request.
 type VolumeGroupInput struct {
 	APIVersion *string      `json:"api_version,omitempty" mapstructure:"api_version,omitempty"` // default 3.1.0
 	Metadata   *Metadata    `json:"metadata,omitempty" mapstructure:"metadata,omitempty"`       // The volume_group kind metadata.
@@ -1313,7 +1313,7 @@ type VolumeGroup struct {
 	Resources   *VolumeGroupResources `json:"resources" mapstructure:"resources"`                         // Volume Group resources.
 }
 
-// VolumeGroupResources Represents the volume group resources
+// VolumeGroupResources Represents the volume group resources.
 type VolumeGroupResources struct {
 	FlashMode         *string         `json:"flash_mode,omitempty" mapstructure:"flash_mode,omitempty"`                   // Flash Mode, if enabled all disks of the VG are pinned to SSD
 	FileSystemType    *string         `json:"file_system_type,omitempty" mapstructure:"file_system_type,omitempty"`       // File system to be used for volume
@@ -1338,7 +1338,7 @@ type VGDisk struct {
 	StorageContainerUUID *string    `json:"storage_container_uuid" mapstructure:"storage_container_uuid"` // Container UUID on which to create the disk.
 }
 
-// VolumeGroupResponse Response object for intentful operations on a volume_group
+// VolumeGroupResponse Response object for intentful operations on a volume_group.
 type VolumeGroupResponse struct {
 	APIVersion *string               `json:"api_version" mapstructure:"api_version"`           //
 	Metadata   *Metadata             `json:"metadata" mapstructure:"metadata"`                 // The volume_group kind metadata
@@ -1355,7 +1355,7 @@ type VolumeGroupDefStatus struct {
 	Description *string               `json:"description" mapstructure:"description"`   // Volume group description.
 }
 
-// VolumeGroupListResponse Response object for intentful operation of volume_groups
+// VolumeGroupListResponse Response object for intentful operation of volume_groups.
 type VolumeGroupListResponse struct {
 	APIVersion *string                `json:"api_version" mapstructure:"api_version"`
 	Entities   []*VolumeGroupResponse `json:"entities,omitempty" mapstructure:"entities,omitempty"`
@@ -1397,13 +1397,13 @@ type DeleteStatus struct {
 
 /* Host Resource */
 
-// DomainCredencial represents the way to login server
+// DomainCredencial represents the way to login server.
 type DomainCredencial struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
 }
 
-// WindowsDomain means Hyper-V node domain
+// WindowsDomain means Hyper-V node domain.
 type WindowsDomain struct {
 	Name                 string            `json:"name,omitempty"`
 	NameServerIP         string            `json:"name_server_ip,omitempty"`
@@ -1413,13 +1413,13 @@ type WindowsDomain struct {
 	DomainCredencial     *DomainCredencial `json:"domain_credencial,omitempty"`
 }
 
-// OplogUsage represents oplog disk usage
+// OplogUsage represents oplog disk usage.
 type OplogUsage struct {
 	OplogDiskPct  *float64 `json:"oplog_disk_pct,omitempty"`
 	OplogDiskSize *int64   `json:"oplog_disk_size,omitempty"`
 }
 
-// ControllerVM means Hyper-V node domain
+// ControllerVM means Hyper-V node domain.
 type ControllerVM struct {
 	IP         string      `json:"ip,omitempty"`
 	NatIP      string      `json:"nat_ip,omitempty"`
@@ -1427,26 +1427,26 @@ type ControllerVM struct {
 	OplogUsage *OplogUsage `json:"oplog_usage,omitempty"`
 }
 
-// FailoverCluster means Hiper-V failover cluster
+// FailoverCluster means Hiper-V failover cluster.
 type FailoverCluster struct {
 	IP               string            `json:"ip,omitempty"`
 	Name             string            `json:"name,omitempty"`
 	DomainCredencial *DomainCredencial `json:"domain_credencial,omitempty"`
 }
 
-// IPMI means Host IPMI Information
+// IPMI means Host IPMI Information.
 type IPMI struct {
 	IP string `json:"ip,omitempty"`
 }
 
-// ReferenceValues references to a kind
+// ReferenceValues references to a kind.
 type ReferenceValues struct {
 	Kind string `json:"kind,omitempty"`
 	UUID string `json:"uuid,omitempty"`
 	Name string `json:"name,omitempty"`
 }
 
-// GPU represnts list of GPUs on the host
+// GPU represnts list of GPUs on the host.
 type GPU struct {
 	Status                 string           `json:"status,omitempty"`
 	Vendor                 string           `json:"vendor,omitempty"`
@@ -1468,7 +1468,7 @@ type GPU struct {
 	DeviceID               *int64           `json:"device_id,omitempty"`
 }
 
-// Hypervisor Full name of hypervisor running on Host
+// Hypervisor Full name of hypervisor running on Host.
 type Hypervisor struct {
 	NumVms             *int64 `json:"num_vms,omitempty"`
 	IP                 string `json:"ip,omitempty"`
@@ -1481,7 +1481,7 @@ type Block struct {
 	BlockModel        string `json:"block_model,omitempty"`
 }
 
-// HostResources represents the host resources
+// HostResources represents the host resources.
 type HostResources struct {
 	GPUDriverVersion       string             `json:"gpu_driver_version,omitempty"`
 	FailoverCluster        *FailoverCluster   `json:"failover_cluster,omitempty"`
@@ -1519,7 +1519,7 @@ type HostStatus struct {
 	ClusterReference *ReferenceValues   `json:"cluster_reference,omitempty"`
 }
 
-// HostResponse Response object for intentful operations on a Host
+// HostResponse Response object for intentful operations on a Host.
 type HostResponse struct {
 	APIVersion string      `json:"api_version,omitempty"`
 	Metadata   *Metadata   `json:"metadata,omitempty"`
@@ -1527,7 +1527,7 @@ type HostResponse struct {
 	Status     *HostStatus `json:"status,omitempty"`
 }
 
-// HostListResponse Response object for intentful operation of Host
+// HostListResponse Response object for intentful operation of Host.
 type HostListResponse struct {
 	APIVersion string              `json:"api_version,omitempty"`
 	Entities   []*HostResponse     `json:"entities,omitempty"`
@@ -1536,7 +1536,7 @@ type HostListResponse struct {
 
 /* Project Resource */
 
-// Resources represents the utilization limits for resource types
+// Resources represents the utilization limits for resource types.
 type Resources struct {
 	Units        string `json:"units,omitempty"`
 	Limit        *int64 `json:"limit,omitempty"`
@@ -1544,7 +1544,7 @@ type Resources struct {
 	Value        *int64 `json:"value,omitempty"`
 }
 
-// ResourceDomain specification (limits)
+// ResourceDomain specification (limits).
 type ResourceDomain struct {
 	Resources []*Resources `json:"resources,omitempty"`
 }
@@ -1579,7 +1579,7 @@ type ProjectSpec struct {
 	Descripion string            `json:"description,omitempty"`
 }
 
-// Project Response object for intentful operations on a Host
+// Project Response object for intentful operations on a Host.
 type Project struct {
 	Status     *ProjectStatus `json:"status,omitempty"`
 	Spec       *ProjectSpec   `json:"spec,omitempty"`
@@ -1587,7 +1587,7 @@ type Project struct {
 	Metadata   *Metadata      `json:"metadata,omitempty"`
 }
 
-// ProjectListResponse Response object for intentful operation of Host
+// ProjectListResponse Response object for intentful operation of Host.
 type ProjectListResponse struct {
 	APIVersion string              `json:"api_version,omitempty"`
 	Entities   []*Project          `json:"entities,omitempty"`
@@ -1656,7 +1656,7 @@ type AccessControlPolicySpec struct {
 	Description *string                       `json:"description,omitempty"`
 }
 
-// AccessControlPolicy Response object for intentful operations on a access policy
+// AccessControlPolicy Response object for intentful operations on a access policy.
 type AccessControlPolicy struct {
 	Status     *AccessControlPolicyStatus `json:"status,omitempty"`
 	Spec       *AccessControlPolicySpec   `json:"spec,omitempty"`
@@ -1664,7 +1664,7 @@ type AccessControlPolicy struct {
 	Metadata   *Metadata                  `json:"metadata,omitempty"`
 }
 
-// AccessControlPolicyListResponse Response object for intentful operation of access policy
+// AccessControlPolicyListResponse Response object for intentful operation of access policy.
 type AccessControlPolicyListResponse struct {
 	APIVersion string                 `json:"api_version,omitempty"`
 	Entities   []*AccessControlPolicy `json:"entities,omitempty"`
@@ -1693,7 +1693,7 @@ type RoleSpec struct {
 	Description *string        `json:"description,omitempty"`
 }
 
-// Role Response object for intentful operations on a access policy
+// Role Response object for intentful operations on a access policy.
 type Role struct {
 	Status     *RoleStatus `json:"status,omitempty"`
 	Spec       *RoleSpec   `json:"spec,omitempty"`
@@ -1701,7 +1701,7 @@ type Role struct {
 	Metadata   *Metadata   `json:"metadata,omitempty"`
 }
 
-// RoleListResponse Response object for intentful operation of access policy
+// RoleListResponse Response object for intentful operation of access policy.
 type RoleListResponse struct {
 	APIVersion string              `json:"api_version,omitempty"`
 	Entities   []*Role             `json:"entities,omitempty"`
@@ -1723,14 +1723,14 @@ type ResourceUtilizationStatus struct {
 	Value        *int64  `json:"value,omitempty"`         // The amount of resource consumed
 }
 
-// An intentful representation of a user
+// UserIntentInput An intentful representation of a user.
 type UserIntentInput struct {
 	APIVersion *string   `json:"api_version,omitempty"` // API Version of the Nutanix v3 API framework.
 	Metadata   *Metadata `json:"metadata,omitempty"`    // The user kind metadata
 	Spec       *UserSpec `json:"spec,omitempty"`        // User Input Definition.
 }
 
-// Response object for intentful operations on a user
+// UserIntentResponse Response object for intentful operations on a user.
 type UserIntentResponse struct {
 	APIVersion *string     `json:"api_version,omitempty"` // API Version of the Nutanix v3 API framework.
 	Metadata   *Metadata   `json:"metadata,omitempty"`    // The user kind metadata
@@ -1738,31 +1738,31 @@ type UserIntentResponse struct {
 	Status     *UserStatus `json:"status,omitempty"`      // User status definition.
 }
 
-// User Input Definition.
+// UserSpec User Input Definition.
 type UserSpec struct {
 	Resources *UserResources `json:"resources,omitempty"` // User Resource Definition.
 }
 
-// User Resource Definition.
+// UserResources User Resource Definition.
 type UserResources struct {
 	DirectoryServiceUser *DirectoryServiceUser `json:"directory_service_user,omitempty"` // A Directory Service user.
 	IdentityProviderUser *IdentityProvider     `json:"identity_provider_user,omitempty"` // An Identity Provider user.
 }
 
-// A Directory Service user.
+// DirectoryServiceUser A Directory Service user.
 type DirectoryServiceUser struct {
 	DefaultUserPrincipalName  *string    `json:"default_user_principal_name,omitempty"` // The Default UserPrincipalName of the user from the directory service.
 	DirectoryServiceReference *Reference `json:"directory_service_reference,omitempty"` // The reference to a directory_service
 	UserPrincipalName         *string    `json:"user_principal_name,omitempty"`         // The UserPrincipalName of the user from the directory service.
 }
 
-// An Identity Provider user.
+// IdentityProvider An Identity Provider user.
 type IdentityProvider struct {
 	IdentityProviderReference *Reference `json:"identity_provider_reference,omitempty"` // The reference to a identity_provider
 	Username                  *string    `json:"username,omitempty"`                    // The username from the identity provider. Name Id for SAML Identity Provider.
 }
 
-// User status definition.
+// UserStatus User status definition.
 type UserStatus struct {
 	MessageList      []MessageResource    `json:"message_list,omitempty"`
 	Name             *string              `json:"name,omitempty"`      // Name of the User.
@@ -1771,7 +1771,7 @@ type UserStatus struct {
 	ExecutionContext *ExecutionContext    `json:"execution_context,omitempty"`
 }
 
-// User Resource Definition.
+// UserStatusResources User Resource Definition.
 type UserStatusResources struct {
 	AccessControlPolicyReferenceList []*Reference          `json:"access_control_policy_reference_list,omitempty"` // List of ACP references.
 	DirectoryServiceUser             *DirectoryServiceUser `json:"directory_service_user,omitempty"`               // A Directory Service user.
@@ -1788,7 +1788,7 @@ type UserListResponse struct {
 	Metadata   *ListMetadataOutput   `json:"metadata,omitempty"` // All api calls that return a list will have this metadata block
 }
 
-// Response object for intentful operations on a user_group
+// UserGroupIntentResponse Response object for intentful operations on a user_group.
 type UserGroupIntentResponse struct {
 	APIVersion *string          `json:"api_version,omitempty"` // API Version of the Nutanix v3 API framework.
 	Metadata   *Metadata        `json:"metadata,omitempty"`    // The user_group kind metadata
@@ -1796,12 +1796,12 @@ type UserGroupIntentResponse struct {
 	Status     *UserGroupStatus `json:"status,omitempty"`      // User group status definition.
 }
 
-// User Group Input Definition.
+// UserGroupSpec User Group Input Definition.
 type UserGroupSpec struct {
 	Resources *UserGroupResources `json:"resources,omitempty"` // User Group Resource Definition
 }
 
-// User Group Resource Definition
+// UserGroupResources User Group Resource Definition.
 type UserGroupResources struct {
 	AccessControlPolicyReferenceList []*Reference               `json:"access_control_policy_reference_list,omitempty"` // List of ACP references.
 	DirectoryServiceUserGroup        *DirectoryServiceUserGroup `json:"directory_service_user_group,omitempty"`         // A Directory Service user group.
@@ -1810,27 +1810,27 @@ type UserGroupResources struct {
 	UserGroupType                    *string                    `json:"user_group_type,omitempty"`
 }
 
-// User group status definition.
+// UserGroupStatus User group status definition.
 type UserGroupStatus struct {
 	MessageList []MessageResource   `json:"message_list,omitempty"`
 	Resources   *UserGroupResources `json:"resources,omitempty"` // User Group Resource Definition.
 	State       *string             `json:"state,omitempty"`     // The state of the entity.
 }
 
-// A Directory Service user group.
+// DirectoryServiceUserGroup A Directory Service user group.
 type DirectoryServiceUserGroup struct {
 	DirectoryServiceReference *Reference `json:"directory_service_reference,omitempty"` // The reference to a directory_service
 	DistinguishedName         *string    `json:"distinguished_name,omitempty"`          // The Distinguished name for the user group.
 }
 
-// Response object for intentful operation of user_groups
+// UserGroupListResponse Response object for intentful operation of user_groups.
 type UserGroupListResponse struct {
 	APIVersion *string                    `json:"api_version,omitempty"` // API Version of the Nutanix v3 API framework.
 	Entities   []*UserGroupIntentResponse `json:"entities,omitempty"`
 	Metadata   *ListMetadataOutput        `json:"metadata,omitempty"` // All api calls that return a list will have this metadata block
 }
 
-// Response object for intentful operations on a user_group
+// PermissionIntentResponse Response object for intentful operations on a user_group.
 type PermissionIntentResponse struct {
 	APIVersion *string           `json:"api_version,omitempty"` // API Version of the Nutanix v3 API framework.
 	Metadata   *Metadata         `json:"metadata,omitempty"`    // The user_group kind metadata
@@ -1838,14 +1838,14 @@ type PermissionIntentResponse struct {
 	Status     *PermissionStatus `json:"status,omitempty"`      // User group status definition.
 }
 
-// Permission Input Definition.
+// PermissionSpec Permission Input Definition.
 type PermissionSpec struct {
 	Name        *string              `json:"name,omitempty"`        // The name for the permission.
 	Description *string              `json:"description,omitempty"` // The display name for the permission.
 	Resources   *PermissionResources `json:"resources,omitempty"`   // Permission Resource Definition
 }
 
-// Permission Resource Definition
+// PermissionResources Permission Resource Definition.
 type PermissionResources struct {
 	Operation *string           `json:"operation,omitempty"`
 	Kind      *string           `json:"kind,omitempty"`
@@ -1857,7 +1857,7 @@ type FieldsPermission struct {
 	FieldNameList []*string `json:"field_name_list,omitempty"`
 }
 
-// Permission status definition.
+// PermissionStatus Permission status definition.
 type PermissionStatus struct {
 	Name        *string              `json:"name,omitempty"`        // The name for the permission.
 	Description *string              `json:"description,omitempty"` // The display name for the permission.
@@ -1866,14 +1866,14 @@ type PermissionStatus struct {
 	State       *string              `json:"state,omitempty"` // The state of the entity.
 }
 
-// Response object for intentful operation of Permissions
+// PermissionListResponse Response object for intentful operation of Permissions.
 type PermissionListResponse struct {
 	APIVersion *string                     `json:"api_version,omitempty"` // API Version of the Nutanix v3 API framework.
 	Entities   []*PermissionIntentResponse `json:"entities,omitempty"`
 	Metadata   *ListMetadataOutput         `json:"metadata,omitempty"` // All api calls that return a list will have this metadata block
 }
 
-// ProtectionRuleResources represents the resources of protection rules
+// ProtectionRuleResources represents the resources of protection rules.
 type ProtectionRuleResources struct {
 	StartTime                        string                              `json:"start_time,omitempty"`
 	AvailabilityZoneConnectivityList []*AvailabilityZoneConnectivityList `json:"availability_zone_connectivity_list,omitempty"`
@@ -1881,14 +1881,14 @@ type ProtectionRuleResources struct {
 	CategoryFilter                   *CategoryFilter                     `json:"category_filter,omitempty"`
 }
 
-// AvailabilityZoneConnectivityList represents a object for resource of protection rule
+// AvailabilityZoneConnectivityList represents a object for resource of protection rule.
 type AvailabilityZoneConnectivityList struct {
 	DestinationAvailabilityZoneIndex *int64                  `json:"destination_availability_zone_index,omitempty"`
 	SourceAvailabilityZoneIndex      *int64                  `json:"source_availability_zone_index,omitempty"`
 	SnapshotScheduleList             []*SnapshotScheduleList `json:"snapshot_schedule_list,omitempty"`
 }
 
-// SnapshotScheduleList represents a object for resource of protection rule
+// SnapshotScheduleList represents a object for resource of protection rule.
 type SnapshotScheduleList struct {
 	RecoveryPointObjectiveSecs    *int64                   `json:"recovery_point_objective_secs,omitempty"`
 	LocalSnapshotRetentionPolicy  *SnapshotRetentionPolicy `json:"local_snapshot_retention_policy,omitempty"`
@@ -1897,25 +1897,25 @@ type SnapshotScheduleList struct {
 	RemoteSnapshotRetentionPolicy *SnapshotRetentionPolicy `json:"remote_snapshot_retention_policy,omitempty"`
 }
 
-// SnapshotRetentionPolicy represents a object for resource of protection rule
+// SnapshotRetentionPolicy represents a object for resource of protection rule.
 type SnapshotRetentionPolicy struct {
 	NumSnapshots          *int64                 `json:"num_snapshots,omitempty"`
 	RollupRetentionPolicy *RollupRetentionPolicy `json:"rollup_retention_policy,omitempty"`
 }
 
-// RollupRetentionPolicy represents a object for resource of protection rule
+// RollupRetentionPolicy represents a object for resource of protection rule.
 type RollupRetentionPolicy struct {
 	Multiple             *int64 `json:"multiple,omitempty"`
 	SnapshotIntervalType string `json:"snapshot_interval_type,omitempty"`
 }
 
-// OrderedAvailabilityZoneList represents a object for resource of protection rule
+// OrderedAvailabilityZoneList represents a object for resource of protection rule.
 type OrderedAvailabilityZoneList struct {
 	ClusterUUID         string `json:"cluster_uuid,omitempty"`
 	AvailabilityZoneURL string `json:"availability_zone_url,omitempty"`
 }
 
-// ProtectionRuleStatus represents a status of a protection rule
+// ProtectionRuleStatus represents a status of a protection rule.
 type ProtectionRuleStatus struct {
 	State            string                   `json:"state,omitempty"`
 	MessageList      []*MessageResource       `json:"message_list,omitempty"`
@@ -1924,14 +1924,14 @@ type ProtectionRuleStatus struct {
 	ExecutionContext *ExecutionContext        `json:"execution_context,omitempty"`
 }
 
-// ProtectionRuleSpec represents a spec of protection rules
+// ProtectionRuleSpec represents a spec of protection rules.
 type ProtectionRuleSpec struct {
 	Name        string                   `json:"name,omitempty"`
 	Description string                   `json:"description,omitempty"`
 	Resources   *ProtectionRuleResources `json:"resources,omitempty"`
 }
 
-// ProtectionRuleResponse represents a response object of a protection rule
+// ProtectionRuleResponse represents a response object of a protection rule.
 type ProtectionRuleResponse struct {
 	APIVersion string                `json:"api_version,omitempty"`
 	Metadata   *Metadata             `json:"metadata,omitempty"`
@@ -1939,21 +1939,21 @@ type ProtectionRuleResponse struct {
 	Status     *ProtectionRuleStatus `json:"status,omitempty"`
 }
 
-// ProtectionRulesListResponse represents the response of a list of protection rules
+// ProtectionRulesListResponse represents the response of a list of protection rules.
 type ProtectionRulesListResponse struct {
 	APIVersion string                    `json:"api_version,omitempty"`
 	Entities   []*ProtectionRuleResponse `json:"entities,omitempty"`
 	Metadata   *ListMetadataOutput       `json:"metadata,omitempty"`
 }
 
-// ProtectionRuleInput Represents the request of create protection rule
+// ProtectionRuleInput Represents the request of create protection rule.
 type ProtectionRuleInput struct {
 	APIVersion string              `json:"api_version,omitempty"`
 	Metadata   *Metadata           `json:"metadata,omitempty"`
 	Spec       *ProtectionRuleSpec `json:"spec,omitempty"`
 }
 
-// RecoveryPlanResources represents the resources of recovery plan
+// RecoveryPlanResources represents the resources of recovery plan.
 type RecoveryPlanResources struct {
 	VolumeGroupRecoveryInfoList []*VolumeGroupRecoveryInfoList `json:"volume_group_recovery_info_list,omitempty"`
 	StageList                   []*StageList                   `json:"stage_list,omitempty"`
@@ -1966,7 +1966,7 @@ type VolumeGroupRecoveryInfoList struct {
 	CategoryFilter *CategoryFilter `json:"category_filter,omitempty"`
 }
 
-// Parameters represents a object for resource of recovery plan
+// Parameters represents a object for resource of recovery plan.
 type Parameters struct {
 	FloatingIPAssignmentList []*FloatingIPAssignmentList `json:"floating_ip_assignment_list,omitempty"`
 	NetworkMappingList       []*NetworkMappingList       `json:"network_mapping_list,omitempty"`
@@ -1981,13 +1981,13 @@ type AvailabilityZoneList struct {
 	AvailabilityZoneURL  *string      `json:"availability_zone_url"`
 }
 
-// FloatingIPAssignmentList represents a object for resource of recovery plan
+// FloatingIPAssignmentList represents a object for resource of recovery plan.
 type FloatingIPAssignmentList struct {
 	AvailabilityZoneURL string                `json:"availability_zone_url,omitempty"`
 	VMIPAssignmentList  []*VMIPAssignmentList `json:"vm_ip_assignment_list,omitempty"`
 }
 
-// VMIPAssignmentList represents a object for resource of recovery plan
+// VMIPAssignmentList represents a object for resource of recovery plan.
 type VMIPAssignmentList struct {
 	TestFloatingIPConfig     *FloatingIPConfig `json:"test_floating_ip_config,omitempty"`
 	RecoveryFloatingIPConfig *FloatingIPConfig `json:"recovery_floating_ip_config,omitempty"`
@@ -1995,25 +1995,25 @@ type VMIPAssignmentList struct {
 	VMNICInformation         *VMNICInformation `json:"vm_nic_information,omitempty"`
 }
 
-// FloatingIPConfig represents a object for resource of recovery plan
+// FloatingIPConfig represents a object for resource of recovery plan.
 type FloatingIPConfig struct {
 	IP                        string `json:"ip,omitempty"`
 	ShouldAllocateDynamically *bool  `json:"should_allocate_dynamically,omitempty"`
 }
 
-// VMNICInformation represents a object for resource of recovery plan
+// VMNICInformation represents a object for resource of recovery plan.
 type VMNICInformation struct {
 	IP   string `json:"ip,omitempty"`
 	UUID string `json:"uuid,omitempty"`
 }
 
-// represents a object for resource of recovery plan
+// NetworkMappingList represents a object for resource of recovery plan.
 type NetworkMappingList struct {
 	AvailabilityZoneNetworkMappingList []*AvailabilityZoneNetworkMappingList `json:"availability_zone_network_mapping_list,omitempty"`
 	AreNetworksStretched               *bool                                 `json:"are_networks_stretched,omitempty"`
 }
 
-// AvailabilityZoneNetworkMappingList represents a object for resource of recovery plan
+// AvailabilityZoneNetworkMappingList represents a object for resource of recovery plan.
 type AvailabilityZoneNetworkMappingList struct {
 	RecoveryNetwork          *Network            `json:"recovery_network,omitempty"`
 	AvailabilityZoneURL      string              `json:"availability_zone_url,omitempty"`
@@ -2032,7 +2032,7 @@ type IPConfigList struct {
 	IPAddress string `json:"ip_address,omitempty"`
 }
 
-// Network represents a object for resource of recovery plan
+// Network represents a object for resource of recovery plan.
 type Network struct {
 	VirtualNetworkReference *Reference    `json:"virtual_network_reference,omitempty"`
 	SubnetList              []*SubnetList `json:"subnet_list,omitempty"`
@@ -2041,31 +2041,31 @@ type Network struct {
 	UseVPCReference         *bool         `json:"use_vpc_reference,omitempty"`
 }
 
-// SubnetList represents a object for resource of recovery plan
+// SubnetList represents a object for resource of recovery plan.
 type SubnetList struct {
 	GatewayIP                 string `json:"gateway_ip,omitempty"`
 	ExternalConnectivityState string `json:"external_connectivity_state,omitempty"`
 	PrefixLength              *int64 `json:"prefix_length,omitempty"`
 }
 
-// StageList represents a object for resource of recovery plan
+// StageList represents a object for resource of recovery plan.
 type StageList struct {
 	StageWork     *StageWork `json:"stage_work,omitempty"`
 	StageUUID     string     `json:"stage_uuid,omitempty"`
 	DelayTimeSecs *int64     `json:"delay_time_secs,omitempty"`
 }
 
-// StageWork represents a object for resource of recovery plan
+// StageWork represents a object for resource of recovery plan.
 type StageWork struct {
 	RecoverEntities *RecoverEntities `json:"recover_entities,omitempty"`
 }
 
-// RecoverEntities represents a object for resource of recovery plan
+// RecoverEntities represents a object for resource of recovery plan.
 type RecoverEntities struct {
 	EntityInfoList []*EntityInfoList `json:"entity_info_list,omitempty"`
 }
 
-// EntityInfoList represents a object for resource of recovery plan
+// EntityInfoList represents a object for resource of recovery plan.
 type EntityInfoList struct {
 	AnyEntityReference *Reference        `json:"any_entity_reference,omitempty"`
 	Categories         map[string]string `json:"categories,omitempty"`
@@ -2077,7 +2077,7 @@ type ScriptList struct {
 	Timeout          *int64 `json:"timeout,omitempty"`
 }
 
-// RecoveryPlanStatus represents a status of a recovery plan
+// RecoveryPlanStatus represents a status of a recovery plan.
 type RecoveryPlanStatus struct {
 	State            string                 `json:"state,omitempty"`
 	MessageList      []*MessageResource     `json:"message_list,omitempty"`
@@ -2086,14 +2086,14 @@ type RecoveryPlanStatus struct {
 	ExecutionContext *ExecutionContext      `json:"execution_context,omitempty"`
 }
 
-// RecoveryPlanSpec represents a spec of recovery plans
+// RecoveryPlanSpec represents a spec of recovery plans.
 type RecoveryPlanSpec struct {
 	Name        string                 `json:"name,omitempty"`
 	Description string                 `json:"description,omitempty"`
 	Resources   *RecoveryPlanResources `json:"resources,omitempty"`
 }
 
-// RecoveryPlanResponse represents a response object of a recovery plan
+// RecoveryPlanResponse represents a response object of a recovery plan.
 type RecoveryPlanResponse struct {
 	APIVersion string              `json:"api_version,omitempty"`
 	Metadata   *Metadata           `json:"metadata,omitempty"`
@@ -2101,14 +2101,14 @@ type RecoveryPlanResponse struct {
 	Status     *RecoveryPlanStatus `json:"status,omitempty"`
 }
 
-// RecoveryPlanListResponse represents the response of a list of recovery plans
+// RecoveryPlanListResponse represents the response of a list of recovery plans.
 type RecoveryPlanListResponse struct {
 	APIVersion string                  `json:"api_version,omitempty"`
 	Entities   []*RecoveryPlanResponse `json:"entities,omitempty"`
 	Metadata   *ListMetadataOutput     `json:"metadata,omitempty"`
 }
 
-// RecoveryPlanInput Represents the request of create recovery plan
+// RecoveryPlanInput Represents the request of create recovery plan.
 type RecoveryPlanInput struct {
 	APIVersion string            `json:"api_version,omitempty"`
 	Metadata   *Metadata         `json:"metadata,omitempty"`
@@ -2343,19 +2343,19 @@ type AvailabilityZoneIntentResponse struct {
 	Status     *AvailabilityZoneStatus `json:"status,omitempty"`
 }
 
-// AvailabilityZone Input Definition.
+// AvailabilityZoneSpec AvailabilityZone Input Definition.
 type AvailabilityZoneSpec struct {
 	Name      *string                    `json:"name,omitempty"`      // The name of the AZ
 	Resources *AvailabilityZoneResources `json:"resources,omitempty"` // AvailabilityZone Resource Definition
 }
 
-// AvailabilityZone Resource Definition
+// AvailabilityZoneResources AvailabilityZone Resource Definition.
 type AvailabilityZoneResources struct {
 	ManagementUrl       *string `json:"management_url,omitempty"` // The URL of the management server
 	ManagementPlaneType *string `json:"management_plane_type"`    // The type of the management plane
 }
 
-// AvailabilityZone status definition.
+// AvailabilityZoneStatus AvailabilityZone status definition.
 type AvailabilityZoneStatus struct {
 	Name        *string                    `json:"name,omitempty"`      // The name of the AZ
 	Resources   *AvailabilityZoneResources `json:"resources,omitempty"` // AvailabilityZone Resource Definition
@@ -2386,7 +2386,7 @@ type ClusterSyncReplicationCapableInput struct {
 // returns it as a JSON number. json.Number is used so both representations
 // unmarshal successfully.
 type ClusterSyncReplicationCapableEntry struct {
-	RttMsecs         *json.Number `json:"rtt_msecs,omitempty"`          // Round trip time in milliseconds.
+	RttMsecs         *json.Number `json:"rtt_msecs,omitempty"` // Round trip time in milliseconds.
 	ClusterReference *Reference   `json:"cluster_reference,omitempty"`
 }
 
@@ -2400,7 +2400,6 @@ type ClusterSyncReplicationCapableResponse []*ClusterSyncReplicationCapableEntry
 //
 // swagger:model vm_vtpm_config
 type VMVtpmConfig struct {
-
 	// data source reference
 	DataSourceReference *Reference `json:"data_source_reference,omitempty" mapstructure:"data_source_reference,omitempty"`
 
@@ -2418,14 +2417,13 @@ type VMVtpmConfig struct {
 //
 // swagger:model vm_vtpm_status
 type VMVtpmStatus struct {
-
 	// data source reference
 	DataSourceReference *Reference `json:"data_source_reference,omitempty" mapstructure:"data_source_reference,omitempty"`
 
 	// Virtual trusted platform module version.
 	Version *string `json:"version,omitempty" mapstructure:"version,omitempty"`
 
-	// Indicates whether virtual trusted platform module is enabled for the the Guest OS.
+	// Indicates whether virtual trusted platform module is enabled for the Guest OS.
 	//
 	VtpmEnabled *bool `json:"vtpm_enabled,omitempty" mapstructure:"vtpm_enabled,omitempty"`
 }

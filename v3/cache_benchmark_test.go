@@ -13,10 +13,12 @@ func BenchmarkClientCacheHitParallel(b *testing.B) {
 		Address:        &url.URL{Host: "fixture.invalid"},
 		ApiCredentials: types.ApiCredentials{APIKey: "offline-fixture"},
 	}}
+
 	want, err := cache.GetOrCreate(params)
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	b.ReportAllocs()
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -24,6 +26,7 @@ func BenchmarkClientCacheHitParallel(b *testing.B) {
 			got, err := cache.GetOrCreate(params)
 			if err != nil || got != want {
 				b.Errorf("cache hit changed client: %v", err)
+
 				return
 			}
 		}

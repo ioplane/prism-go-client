@@ -3,7 +3,7 @@ package v3
 import (
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -488,8 +488,8 @@ HMUfpIBvFSDJ3gyICh3WZlXi/EjJKSZp4A==
 		}
 
 		// Create an option that returns an error
-		invalidOpt := func(c *Client) error {
-			return fmt.Errorf("invalid option")
+		invalidOpt := func(_ *Client) error {
+			return errors.New("invalid option")
 		}
 
 		client, err := NewV3Client(credentials, invalidOpt)

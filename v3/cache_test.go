@@ -91,13 +91,13 @@ func TestDeleteRemovesClientFromCache(t *testing.T) {
 	assert.ErrorIs(t, err, types.ErrorClientNotFound)
 }
 
-func TestDeleteDoesNotErrorIfClientNotPresentInCache(t *testing.T) {
+func TestDeleteDoesNotErrorIfClientNotPresentInCache(_ *testing.T) {
 	cache := NewClientCache()
 
 	cache.Delete(&cachedClientParams{name: "cluster1"}) // No error expected
 }
 
-// Test GetOrCreate defensive programming - nil Address pointer validation
+// TestGetOrCreateNilAddressValidation Test GetOrCreate defensive programming - nil Address pointer validation.
 func TestGetOrCreateNilAddressValidation(t *testing.T) {
 	cache := NewClientCache()
 	params := &cachedClientParams{
@@ -118,7 +118,7 @@ func TestGetOrCreateNilAddressValidation(t *testing.T) {
 	assert.Contains(t, err.Error(), "management endpoint address is nil for cachedClientParams with key test-client")
 }
 
-// Test GetOrCreate defensive programming - empty Address.Host validation
+// TestGetOrCreateEmptyHostValidation Test GetOrCreate defensive programming - empty Address.Host validation.
 func TestGetOrCreateEmptyHostValidation(t *testing.T) {
 	cache := NewClientCache()
 	params := &cachedClientParams{
@@ -139,7 +139,7 @@ func TestGetOrCreateEmptyHostValidation(t *testing.T) {
 	assert.Contains(t, err.Error(), "management endpoint address host is empty for cachedClientParams with key test-client")
 }
 
-// Test GetOrCreate defensive programming - empty Username validation
+// TestGetOrCreateEmptyUsernameValidation Test GetOrCreate defensive programming - empty Username validation.
 func TestGetOrCreateEmptyUsernameValidation(t *testing.T) {
 	cache := NewClientCache()
 	params := &cachedClientParams{
@@ -160,7 +160,7 @@ func TestGetOrCreateEmptyUsernameValidation(t *testing.T) {
 	assert.Contains(t, err.Error(), "API credentials(either a username and password, or an API key) is required for authentication")
 }
 
-// Test GetOrCreate defensive programming - empty Password validation
+// TestGetOrCreateEmptyPasswordValidation Test GetOrCreate defensive programming - empty Password validation.
 func TestGetOrCreateEmptyPasswordValidation(t *testing.T) {
 	cache := NewClientCache()
 	params := &cachedClientParams{
@@ -181,7 +181,7 @@ func TestGetOrCreateEmptyPasswordValidation(t *testing.T) {
 	assert.Contains(t, err.Error(), "API credentials(either a username and password, or an API key) is required for authentication")
 }
 
-// Test GetOrCreate defensive programming - all validations pass
+// TestGetOrCreateValidationsPassed Test GetOrCreate defensive programming - all validations pass.
 func TestGetOrCreateValidationsPassed(t *testing.T) {
 	cache := NewClientCache()
 	params := &cachedClientParams{
@@ -204,7 +204,7 @@ func TestGetOrCreateValidationsPassed(t *testing.T) {
 	assert.NotNil(t, client)
 }
 
-// Test validateManagementEndpoint function directly
+// TestValidateManagementEndpoint Test validateManagementEndpoint function directly.
 func TestValidateManagementEndpoint(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -321,13 +321,13 @@ func TestValidateCredentials(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateCredentials(tt.credentials, tt.key)
-			if tt.wantErr == "" {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := validateCredentials(testCase.credentials, testCase.key)
+			if testCase.wantErr == "" {
 				assert.NoError(t, err)
 			} else {
-				assert.EqualError(t, err, tt.wantErr)
+				assert.EqualError(t, err, testCase.wantErr)
 			}
 		})
 	}
