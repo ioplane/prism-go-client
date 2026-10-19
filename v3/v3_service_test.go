@@ -42,6 +42,10 @@ func setup(t *testing.T) (*http.ServeMux, *internal.Client, *httptest.Server) {
 		internal.WithUserAgent(userAgent),
 		internal.WithAbsolutePath(absolutePath),
 		internal.WithBaseURL(server.URL))
+	if err != nil {
+		server.Close()
+	}
+
 	require.NoError(t, err)
 
 	return mux, client, server
@@ -74,7 +78,9 @@ func TestOperations_CreateSubnet(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -218,7 +224,9 @@ func TestOperations_UpdateSubnet(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -299,7 +307,9 @@ func TestOperations_CreateImage(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -569,7 +579,9 @@ func TestOperations_UpdateImage(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -637,7 +649,9 @@ func TestOperations_CreateOrUpdateCategoryKey(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -858,7 +872,9 @@ func TestOperations_CreateOrUpdateCategoryValue(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -1051,7 +1067,9 @@ func TestOperations_CreateNetworkSecurityRule(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -1264,7 +1282,9 @@ func TestOperations_UpdateNetworkSecurityRule(t *testing.T) {
 
 			err := json.NewDecoder(request.Body).Decode(&actual)
 			if err != nil {
-				t.Fatalf("decode json: %v", err)
+				t.Errorf("decode json: %v", err)
+
+				return
 			}
 
 			if !reflect.DeepEqual(actual, expected) {
@@ -1339,7 +1359,9 @@ func TestOperations_CreateVolumeGroup(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -1535,7 +1557,9 @@ func TestOperations_UpdateVolumeGroup(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -1699,7 +1723,9 @@ func TestOperations_CreateProject(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -1864,7 +1890,9 @@ func TestOperations_UpdateProject(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -2023,7 +2051,9 @@ func TestOperations_CreateAccessControlPolicy(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -2182,7 +2212,9 @@ func TestOperations_UpdateAccessControlPolicy(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -2340,7 +2372,9 @@ func TestOperations_CreateRole(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -2503,7 +2537,9 @@ func TestOperations_UpdateRole(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -2661,7 +2697,9 @@ func TestOperations_CreateUser(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -2821,7 +2859,9 @@ func TestOperations_UpdateUser(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		if !reflect.DeepEqual(actual, expected) {
@@ -3011,7 +3051,9 @@ func TestOperations_CreateProtectionRule(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		assertions := assert.New(t)
@@ -3238,7 +3280,9 @@ func TestOperations_UpdateProtectionRules(t *testing.T) {
 
 		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
 		assertions := assert.New(t)
@@ -4367,7 +4411,9 @@ func TestOperations_ListAllAvailabilityZones(t *testing.T) {
 		testHTTPMethod(t, r, http.MethodPost)
 
 		var body DSMetadata
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+			return
+		}
 		offset := ptr.Deref(body.Offset, 0)
 
 		count := int64(100)
@@ -4437,7 +4483,9 @@ func TestOperations_GetSyncReplicationCapableClusters(t *testing.T) {
 		}
 
 		var v map[string]any
-		require.NoError(t, json.NewDecoder(request.Body).Decode(&v))
+		if !assert.NoError(t, json.NewDecoder(request.Body).Decode(&v)) {
+			return
+		}
 
 		if !reflect.DeepEqual(v, expected) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
