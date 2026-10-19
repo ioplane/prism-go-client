@@ -111,5 +111,3 @@ func NewConfigClientWithBearerTokenAndRetry(host, basePath, scheme, bearerToken 
 
 	return config.New(transport, strfmt.Default)
 }
-
-func sdkLintGateProbeNusights() {}
