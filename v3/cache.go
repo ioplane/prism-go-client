@@ -2,9 +2,6 @@ package v3
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -91,7 +88,7 @@ func (c *ClientCache) GetOrCreateWithContext(ctx context.Context, params types.C
 		return nil, err
 	}
 
-	hash, err := validationHashFromEndpoint(endpoint)
+	hash, err := endpoint.GetHash()
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate validation hash for cachedClientParams with key %s: %w", key, err)
 	}
@@ -199,23 +196,6 @@ func (c *ClientCache) newClient(ctx context.Context, key string, managementEndpo
 	}
 
 	return client, nil
-}
-
-func validationHashFromEndpoint(endpoint types.ManagementEndpoint) (string, error) {
-	// Note: this will only work reliably as long as types.ManagementEndpoint is predictably serializable i.e. does
-	// not contain a map. Due to randomized ordering of map keys in Go, we would constantly invalidate caches
-	// if the ManagementEndpoint has a map.
-	serializedEndpoint, err := json.Marshal(endpoint)
-	if err != nil {
-		return "", err
-	}
-
-	hasher := sha256.New()
-	hasher.Write(serializedEndpoint)
-	hashedBytes := hasher.Sum(nil)
-	currentValidationHash := hex.EncodeToString(hashedBytes)
-
-	return currentValidationHash, nil
 }
 
 func setDefaultsForCredentials(credentials *prismgoclient.Credentials) {
