@@ -382,3 +382,21 @@ metadata.length и `entities:null` при отсутствии совпаден�
 ошибок JSON/nil filter/entity shape, прежний default base path `$.` и владение
 body не меняются. Это локальное исправление SDK; оно не подтверждает поведение
 Prism, production или готовность полного maximum lint gate.
+
+
+## Качество production-кода общего HTTP client
+
+`um-docs-nrsu.6.10.6.2`: production-код `internal/client.go` разделяет
+проверку entity shape и сопоставление одного фильтра; исходные predicates
+участвуют в AND по позиции, включая повторяющиеся имена. DTO
+`ErrorResponse` и `MessageResource` перенесены в `internal/errors.go`
+без изменения полей, tags и legacy `Error()` (последнее сообщение).
+Публичные типы и signatures, wire nil/empty, порядок ошибок, ownership body,
+upload replay и session synchronization сохраняются.
+
+Ошибка `x509.SystemCertPool` теперь сохраняет cause через `%w`:
+`errors.Is`/`errors.As` доступны при прежнем `Error()` text. Основание:
+Context7 `/golang/go`, pinned stdlib `fmt/errors.go` и `errors/errors.go`.
+Свежие validation errors, прямые возвращаемые ошибки и намеренно игнорируемые
+Close errors сохраняют прежние контракты; ограничения maximum profile
+учитываются отдельно. Этот срез не закрывает полный strict SDK gate.

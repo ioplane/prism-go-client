@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Shared client construction retains the system certificate pool error cause for errors.Is/errors.As while preserving its diagnostic text.
+
 - Client-side filters with the same name are evaluated as separate AND predicates with their own allowed values, preserving value/base-path OR matching, entity order and original metadata.
 
 - Kubernetes environment providers reject a missing credential reference with a configuration error before accessing informers, instead of panicking or falling back to another provider. Valid references and original Secret lookup errors are preserved.
