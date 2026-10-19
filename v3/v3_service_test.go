@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -377,9 +378,25 @@ func TestOperations_UploadImageError(t *testing.T) {
 		op := Operations{
 			client: operationClient,
 		}
-		if err := op.UploadImage(context.Background(), uuid, filepath); (err != nil) != true {
-			t.Errorf("Operations.UploadImage() error = %v, wantErr %v", err, true)
+		err := op.UploadImage(context.Background(), uuid, filepath)
+		require.Error(t, err)
+
+		var pathErr *os.PathError
+		if assert.ErrorAs(t, err, &pathErr) {
+			assert.Equal(t, "error: cannot open file: "+pathErr.Error(), err.Error())
 		}
+
+		assert.ErrorIs(t, err, os.ErrNotExist)
+	})
+
+	t.Run("Test UploadImage ERROR (Creating Request)", func(t *testing.T) {
+		op := Operations{client: operationClient}
+		err := op.UploadImage(context.Background(), "%", "v3.go")
+		require.Error(t, err)
+		assert.Equal(t, "error: Creating request error parsing request URL", err.Error())
+
+		var urlErr *url.Error
+		assert.ErrorAs(t, err, &urlErr)
 	})
 }
 

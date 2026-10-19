@@ -363,13 +363,13 @@ func (op Operations) UploadImage(ctx context.Context, uuid, filepath string) err
 
 	file, err := os.Open(filepath)
 	if err != nil {
-		return fmt.Errorf("error: cannot open file: %s", err)
+		return fmt.Errorf("error: cannot open file: %w", err)
 	}
 	defer func() { _ = file.Close() }()
 
 	req, err := op.client.NewUploadRequest(http.MethodPut, path, file)
 	if err != nil {
-		return fmt.Errorf("error: Creating request %s", err)
+		return fmt.Errorf("error: Creating request %w", err)
 	}
 
 	err = op.client.Do(ctx, req, nil)
