@@ -77,10 +77,12 @@ func TestUploadReplayAndOwnership(t *testing.T) {
 func readUploadBody(t *testing.T, body io.ReadCloser, want string) {
 	t.Helper()
 
-	data, err := io.ReadAll(body)
-	require.NoError(t, err)
+	data, readErr := io.ReadAll(body)
+	closeErr := body.Close()
+
+	require.NoError(t, readErr)
 	require.Equal(t, want, string(data))
-	require.NoError(t, body.Close())
+	require.NoError(t, closeErr)
 }
 
 func TestUploadRedirect(t *testing.T) {

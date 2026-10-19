@@ -844,12 +844,15 @@ func legacyUploadFile(t *testing.T, content string) *os.File {
 	created, err := os.CreateTemp(t.TempDir(), "test-upload")
 	require.NoError(t, err)
 
+	var writeErr error
 	if content != "" {
-		_, err = created.WriteString(content)
-		require.NoError(t, err)
+		_, writeErr = created.WriteString(content)
 	}
 
-	require.NoError(t, created.Close())
+	closeErr := created.Close()
+
+	require.NoError(t, writeErr)
+	require.NoError(t, closeErr)
 
 	file, err := os.Open(created.Name())
 	require.NoError(t, err)
@@ -1038,7 +1041,6 @@ func TestDoWithFilters_ErrorCases(t *testing.T) {
 		client.ErrorMsg = testClientError
 
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://test.com", http.NoBody)
-		require.NoError(t, err)
 		require.NoError(t, err)
 
 		var result map[string]any
