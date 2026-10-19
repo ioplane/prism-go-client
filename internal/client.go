@@ -932,12 +932,3 @@ func (r *ErrorResponse) Error() string {
 
 	return err
 }
-
-func fillStruct(data map[string]interface{}, result interface{}) error {
-	j, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(j, result)
-}
