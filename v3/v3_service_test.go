@@ -88,7 +88,7 @@ func TestOperations_CreateSubnet(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "subnet",
@@ -139,7 +139,7 @@ func TestOperations_DeleteSubnet(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/subnets/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -234,7 +234,7 @@ func TestOperations_UpdateSubnet(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "subnet",
@@ -317,7 +317,7 @@ func TestOperations_CreateImage(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "image",
@@ -447,7 +447,7 @@ func TestOperations_DeleteImage(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/images/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -514,7 +514,7 @@ func TestOperations_GetImage(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/images/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"image","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+		testFprint(t, w, `{"metadata": {"kind":"image","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	response := &ImageIntentResponse{}
@@ -547,7 +547,7 @@ func TestOperations_ListImage(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/images/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"image","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"image","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	list := &ImageListIntentResponse{}
@@ -612,7 +612,7 @@ func TestOperations_UpdateImage(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "image",
@@ -682,7 +682,7 @@ func TestOperations_CreateOrUpdateCategoryKey(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"description": "Testing Keys",
 			"name": "test_category_key",
 			"system_defined": false
@@ -720,7 +720,7 @@ func TestOperations_ListCategories(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/categories/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{ "description": "Testing Keys", "name": "test_category_key", "system_defined": false }]}`)
+		testFprint(t, w, `{"entities":[{ "description": "Testing Keys", "name": "test_category_key", "system_defined": false }]}`)
 	})
 
 	list := &CategoryKeyListResponse{}
@@ -809,7 +809,7 @@ func TestOperations_GetCategoryKey(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{
+		testFprint(t, w, `{
 			"description": "Testing Keys",
 			"name": "test_category_key",
 			"system_defined": false
@@ -846,7 +846,7 @@ func TestOperations_ListCategoryValues(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{ "description": "Testing Keys", "value": "test_category_value", "system_defined": false }]}`)
+		testFprint(t, w, `{"entities":[{ "description": "Testing Keys", "value": "test_category_value", "system_defined": false }]}`)
 	})
 
 	list := &CategoryValueListResponse{}
@@ -905,7 +905,7 @@ func TestOperations_CreateOrUpdateCategoryValue(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"description": "Testing Value",
 			"name": "test_category_key",
 			"value": "test_category_value",
@@ -947,7 +947,7 @@ func TestOperations_GetCategoryValue(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key/test_category_value", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{
+		testFprint(t, w, `{
 			"description": "Testing Value",
 			"name": "test_category_key",
 			"value": "test_category_value",
@@ -1039,7 +1039,7 @@ func TestOperations_GetCategoryQuery(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/category/query", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"results":[{ "kind": "category_result" }]}`)
+		testFprint(t, w, `{"results":[{ "kind": "category_result" }]}`)
 	})
 
 	response := &CategoryQueryResponse{}
@@ -1100,7 +1100,7 @@ func TestOperations_CreateNetworkSecurityRule(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "network_security_rule",
@@ -1150,7 +1150,7 @@ func TestOperations_DeleteNetworkSecurityRule(t *testing.T) {
 		func(w http.ResponseWriter, r *http.Request) {
 			testHTTPMethod(t, r, http.MethodDelete)
 
-			_, _ = fmt.Fprintf(w, `{
+			testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -1218,7 +1218,7 @@ func TestOperations_GetNetworkSecurityRule(t *testing.T) {
 		func(w http.ResponseWriter, r *http.Request) {
 			testHTTPMethod(t, r, http.MethodGet)
 
-			_, _ = fmt.Fprint(w, `{"metadata": {"kind":"network_security_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+			testFprint(t, w, `{"metadata": {"kind":"network_security_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 		})
 
 	response := &NetworkSecurityRuleIntentResponse{}
@@ -1251,7 +1251,7 @@ func TestOperations_ListNetworkSecurityRule(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/network_security_rules/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"network_security_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"network_security_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	list := &NetworkSecurityRuleListIntentResponse{}
@@ -1315,7 +1315,7 @@ func TestOperations_UpdateNetworkSecurityRule(t *testing.T) {
 				t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 			}
 
-			_, _ = fmt.Fprintf(writer, `{
+			testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "network_security_rule",
@@ -1392,7 +1392,7 @@ func TestOperations_CreateVolumeGroup(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "volume_group",
@@ -1492,7 +1492,7 @@ func TestOperations_GetVolumeGroup(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/volume_groups/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"volume_group","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+		testFprint(t, w, `{"metadata": {"kind":"volume_group","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	response := &VolumeGroupResponse{}
@@ -1525,7 +1525,7 @@ func TestOperations_ListVolumeGroup(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/volume_groups/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"volume_group","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"volume_group","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	list := &VolumeGroupListResponse{}
@@ -1590,7 +1590,7 @@ func TestOperations_UpdateVolumeGroup(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "volume_group",
@@ -1648,7 +1648,7 @@ func TestOperations_GetHost(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/hosts/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+		testFprint(t, w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	hostResponse := &HostResponse{}
@@ -1681,7 +1681,7 @@ func TestOperations_ListHost(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/hosts/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	hostList := &HostListResponse{}
@@ -1756,7 +1756,7 @@ func TestOperations_CreateProject(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "project",
@@ -1816,7 +1816,7 @@ func TestOperations_GetProject(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/projects/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+		testFprint(t, w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	hostResponse := &Project{}
@@ -1849,7 +1849,7 @@ func TestOperations_ListProject(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/projects/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	hostList := &ProjectListResponse{}
@@ -1923,7 +1923,7 @@ func TestOperations_UpdateProject(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "project",
@@ -1984,7 +1984,7 @@ func TestOperations_DeleteProject(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/projects/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -2084,7 +2084,7 @@ func TestOperations_CreateAccessControlPolicy(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "access_control_policy",
@@ -2141,7 +2141,7 @@ func TestOperations_GetAccessControlPolicy(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/access_control_policies/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+		testFprint(t, w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	hostResponse := &AccessControlPolicy{}
@@ -2174,7 +2174,7 @@ func TestOperations_ListAccessControlPolicy(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/access_control_policies/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	hostList := &AccessControlPolicyListResponse{}
@@ -2245,7 +2245,7 @@ func TestOperations_UpdateAccessControlPolicy(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "access_control_policy",
@@ -2303,7 +2303,7 @@ func TestOperations_DeleteAccessControlPolicy(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/access_control_policies/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -2405,7 +2405,7 @@ func TestOperations_CreateRole(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "role",
@@ -2464,7 +2464,7 @@ func TestOperations_GetRole(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/roles/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+		testFprint(t, w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	hostResponse := &Role{}
@@ -2497,7 +2497,7 @@ func TestOperations_ListRole(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/roles/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	hostList := &RoleListResponse{}
@@ -2570,7 +2570,7 @@ func TestOperations_UpdateRole(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "role",
@@ -2630,7 +2630,7 @@ func TestOperations_DeleteRole(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/roles/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -2730,7 +2730,7 @@ func TestOperations_CreateUser(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "user",
@@ -2787,7 +2787,7 @@ func TestOperations_GetUser(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/users/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"user","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+		testFprint(t, w, `{"metadata": {"kind":"user","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	hostResponse := &UserIntentResponse{}
@@ -2820,7 +2820,7 @@ func TestOperations_ListUser(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/users/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"user","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"user","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	hostList := &UserListResponse{}
@@ -2892,7 +2892,7 @@ func TestOperations_UpdateUser(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "user",
@@ -2951,7 +2951,7 @@ func TestOperations_DeleteUser(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/users/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -3085,7 +3085,7 @@ func TestOperations_CreateProtectionRule(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "protection_rule",
@@ -3175,7 +3175,7 @@ func TestOperations_GetProtectionRule(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/protection_rules/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"protection_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+		testFprint(t, w, `{"metadata": {"kind":"protection_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	response := &ProtectionRuleResponse{}
@@ -3208,7 +3208,7 @@ func TestOperations_ListProtectionRules(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/protection_rules/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"protection_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"protection_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	responseList := &ProtectionRulesListResponse{}
@@ -3314,7 +3314,7 @@ func TestOperations_UpdateProtectionRules(t *testing.T) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(writer, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "protection_rule",
@@ -3714,7 +3714,7 @@ func TestOperations_GetRecoveryPlanJob(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"recovery_plan_jobs","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+		testFprint(t, w, `{"metadata": {"kind":"recovery_plan_jobs","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	response := &RecoveryPlanJobIntentResponse{}
@@ -3748,13 +3748,13 @@ func TestOperations_GetRecoveryPlanJobStatus(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc/execution_status", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"operation_status": {"percentage_complete":55,"status":"Running"}}`)
+		testFprint(t, w, `{"operation_status": {"percentage_complete":55,"status":"Running"}}`)
 	})
 
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc/cleanup_status", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"operation_status": {"percentage_complete":55,"status":"Running"},"preprocessing_status": {"percentage_complete":100,"status":"Complete"}}`)
+		testFprint(t, w, `{"operation_status": {"percentage_complete":55,"status":"Running"},"preprocessing_status": {"percentage_complete":100,"status":"Complete"}}`)
 	})
 
 	executionStatusResponse := &RecoveryPlanJobExecutionStatus{
@@ -3877,13 +3877,13 @@ func TestOperations_PerformRecoveryPlanJobAction(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc/cleanup", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"task_uuid": "ff1b9547-dc9a-4ebd-a2ff-f2b718af935e"}`)
+		testFprint(t, w, `{"task_uuid": "ff1b9547-dc9a-4ebd-a2ff-f2b718af935e"}`)
 	})
 
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc/rerun", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"task_uuid": "ff1b9547-dc9a-4ebd-a2ff-f2b718af935e"}`)
+		testFprint(t, w, `{"task_uuid": "ff1b9547-dc9a-4ebd-a2ff-f2b718af935e"}`)
 	})
 
 	type fields struct {
@@ -3969,7 +3969,7 @@ func TestOperations_ListRecoveryPlanJobs(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"recovery_plan_jobs","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"recovery_plan_jobs","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	responseList := &RecoveryPlanJobListResponse{}
@@ -4006,7 +4006,7 @@ func TestOperations_GroupsGetEntities(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/groups", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{"filtered_group_count": 3, "group_results": [{"entity_results": [{"entity_id":"some_entity_id", "data":[{"values":[{"time":100, "values":["a", "b", "c"]}]}]}]}]}`)
+		testFprint(t, w, `{"filtered_group_count": 3, "group_results": [{"entity_results": [{"entity_id":"some_entity_id", "data":[{"values":[{"time":100, "values":["a", "b", "c"]}]}]}]}]}`)
 	})
 
 	operationClient := client
@@ -4065,7 +4065,7 @@ func TestOperations_GetAvailabilityZone(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/availability_zones/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
 
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"availability_zone","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}, "status":{"resources":{"management_url":"dfde831a-4e87-4a75-960f-89b0148aa2cc"}}}`)
+		testFprint(t, w, `{"metadata": {"kind":"availability_zone","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}, "status":{"resources":{"management_url":"dfde831a-4e87-4a75-960f-89b0148aa2cc"}}}`)
 	})
 
 	response := &AvailabilityZoneIntentResponse{}
@@ -4403,7 +4403,7 @@ func TestOperations_ListAvailabilityZones(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/availability_zones/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{
+		testFprint(t, w, `{
 			"api_version": "3.1",
 			"metadata": {"kind": "availability_zone", "length": 2, "offset": 0, "total_matches": 2},
 			"entities": [
@@ -4451,7 +4451,7 @@ func TestOperations_ListAllAvailabilityZones(t *testing.T) {
 				`{"metadata": {"kind": "availability_zone", "uuid": "uuid-%d-%d"}}`, offset, i))
 		}
 
-		_, _ = fmt.Fprintf(writer, `{"api_version": "3.1", "metadata": {"kind": "availability_zone", "length": %d, "offset": %d, "total_matches": 150}, "entities": [%s]}`,
+		testFprintf(t, writer, `{"api_version": "3.1", "metadata": {"kind": "availability_zone", "length": %d, "offset": %d, "total_matches": 150}, "entities": [%s]}`,
 			count, offset, strings.Join(entities, ","))
 	})
 
@@ -4470,7 +4470,7 @@ func TestOperations_ListAllAvailabilityZonesSinglePage(t *testing.T) {
 	mux.HandleFunc("/api/nutanix/v3/availability_zones/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
-		_, _ = fmt.Fprint(w, `{
+		testFprint(t, w, `{
 			"api_version": "3.1",
 			"metadata": {"kind": "availability_zone", "length": 1, "offset": 0, "total_matches": 1},
 			"entities": [
@@ -4516,7 +4516,7 @@ func TestOperations_GetSyncReplicationCapableClusters(t *testing.T) {
 		}
 
 		// Note: rtt_msecs is returned by PC as a JSON number, not a string.
-		_, _ = fmt.Fprint(writer, `[{"rtt_msecs": 0.37, "cluster_reference": {"kind": "cluster", "name": "pe-1", "uuid": "00064ca8-0573-8976-1db0-7cc2558d1648"}}]`)
+		testFprint(t, writer, `[{"rtt_msecs": 0.37, "cluster_reference": {"kind": "cluster", "name": "pe-1", "uuid": "00064ca8-0573-8976-1db0-7cc2558d1648"}}]`)
 	})
 
 	op := Operations{client: client}
@@ -4539,6 +4539,20 @@ func TestOperations_GetSyncReplicationCapableClusters(t *testing.T) {
 	assert.Equal(t, "0.37", entry.RttMsecs.String())
 	require.NotNil(t, entry.ClusterReference)
 	assert.Equal(t, "00064ca8-0573-8976-1db0-7cc2558d1648", ptr.Deref(entry.ClusterReference.UUID, ""))
+}
+
+func testFprint(t *testing.T, writer io.Writer, args ...any) {
+	t.Helper()
+
+	_, err := fmt.Fprint(writer, args...)
+	assert.NoError(t, err)
+}
+
+func testFprintf(t *testing.T, writer io.Writer, format string, args ...any) {
+	t.Helper()
+
+	_, err := fmt.Fprintf(writer, format, args...)
+	assert.NoError(t, err)
 }
 
 func testOperationResult(t *testing.T, operation string, got, want any, err error, wantErr bool) {

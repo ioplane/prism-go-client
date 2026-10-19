@@ -211,7 +211,7 @@ func TestListAllInvalidPagination(t *testing.T) {
 				rawEntities, err := json.Marshal(entities)
 				assert.NoError(t, err)
 
-				_, _ = fmt.Fprintf(writer, `{"metadata":%s,"entities":%s}`, metadata, rawEntities)
+				testFprintf(t, writer, `{"metadata":%s,"entities":%s}`, metadata, rawEntities)
 			})
 			require.NotPanics(t, func() {
 				var (
@@ -310,7 +310,7 @@ func TestListAllRecoveryPlanEmptyJSON(t *testing.T) {
 			defer server.Close()
 
 			mux.HandleFunc("/api/nutanix/v3/recovery_plans/list", func(w http.ResponseWriter, _ *http.Request) {
-				_, _ = fmt.Fprintf(w, `{"metadata":{"offset":0,"length":0,"total_matches":0},"entities":%s}`, entities)
+				testFprintf(t, w, `{"metadata":{"offset":0,"length":0,"total_matches":0},"entities":%s}`, entities)
 			})
 
 			response, err := (Operations{client: client}).ListAllRecoveryPlans(context.Background(), "")
