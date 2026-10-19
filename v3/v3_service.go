@@ -13,12 +13,28 @@ import (
 	"github.com/nutanix-cloud-native/prism-go-client/v3/models"
 )
 
-// Operations ...
+const (
+	accessControlPoliciesPath = "/access_control_policies/"
+	addressGroupsPath         = "/address_groups/"
+	categoriesPath            = "/categories/"
+	imagesPath                = "/images/"
+	networkSecurityRulesPath  = "/network_security_rules/"
+	projectsPath              = "/projects/"
+	protectionRulesPath       = "/protection_rules/"
+	recoveryPlansPath         = "/recovery_plans/"
+	rolesPath                 = "/roles/"
+	serviceGroupsPath         = "/service_groups/"
+	subnetsPath               = "/subnets/"
+	usersPath                 = "/users/"
+	volumeGroupsPath          = "/volume_groups/"
+)
+
+// Operations implements v3 resource operations using the shared HTTP client.
 type Operations struct {
 	client *internal.Client
 }
 
-// Service ...
+// Service defines the supported v3 resource operations.
 type Service interface {
 	CreateVM(ctx context.Context, createRequest *VMIntentInput) (*VMIntentResponse, error)
 	DeleteVM(ctx context.Context, uuid string) (*DeleteResponse, error)
@@ -248,7 +264,7 @@ func (op Operations) CreateSubnet(ctx context.Context, createRequest *SubnetInte
 // @param uuid The uuid of the entity.
 // @return error if exist error.
 func (op Operations) DeleteSubnet(ctx context.Context, uuid string) (*DeleteResponse, error) {
-	path := "/subnets/" + uuid
+	path := subnetsPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	deleteResponse := new(DeleteResponse)
@@ -266,7 +282,7 @@ func (op Operations) DeleteSubnet(ctx context.Context, uuid string) (*DeleteResp
 // @param uuid The uuid of the entity.
 // @return *SubnetIntentResponse.
 func (op Operations) GetSubnet(ctx context.Context, uuid string) (*SubnetIntentResponse, error) {
-	path := "/subnets/" + uuid
+	path := subnetsPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	subnetIntentResponse := new(SubnetIntentResponse)
@@ -310,7 +326,7 @@ func (op Operations) ListSubnet(ctx context.Context, getEntitiesRequest *DSMetad
 // @param body
 // @return *SubnetIntentResponse.
 func (op Operations) UpdateSubnet(ctx context.Context, uuid string, body *SubnetIntentInput) (*SubnetIntentResponse, error) {
-	path := "/subnets/" + uuid
+	path := subnetsPath + uuid
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	subnetIntentResponse := new(SubnetIntentResponse)
 
@@ -367,7 +383,7 @@ func (op Operations) UploadImage(ctx context.Context, uuid, filepath string) err
 // @param uuid The uuid of the entity.
 // @return error if error exists.
 func (op Operations) DeleteImage(ctx context.Context, uuid string) (*DeleteResponse, error) {
-	path := "/images/" + uuid
+	path := imagesPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	deleteResponse := new(DeleteResponse)
@@ -385,7 +401,7 @@ func (op Operations) DeleteImage(ctx context.Context, uuid string) (*DeleteRespo
 // @param uuid The uuid of the entity.
 // @return *ImageIntentResponse.
 func (op Operations) GetImage(ctx context.Context, uuid string) (*ImageIntentResponse, error) {
-	path := "/images/" + uuid
+	path := imagesPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	imageIntentResponse := new(ImageIntentResponse)
@@ -421,7 +437,7 @@ func (op Operations) ListImage(ctx context.Context, getEntitiesRequest *DSMetada
 // @param body
 // @return *ImageIntentResponse.
 func (op Operations) UpdateImage(ctx context.Context, uuid string, body *ImageIntentInput) (*ImageIntentResponse, error) {
-	path := "/images/" + uuid
+	path := imagesPath + uuid
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	imageIntentResponse := new(ImageIntentResponse)
 
@@ -494,9 +510,9 @@ func (op Operations) ListCluster(ctx context.Context, getEntitiesRequest *DSMeta
 // 	return imageIntentResponse, nil
 // }
 
-// CreateOrUpdateCategoryKey ...
+// CreateOrUpdateCategoryKey performs the create or update category key operation.
 func (op Operations) CreateOrUpdateCategoryKey(ctx context.Context, body *CategoryKey) (*CategoryKeyStatus, error) {
-	path := "/categories/" + ptr.Deref(body.Name, "")
+	path := categoriesPath + ptr.Deref(body.Name, "")
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	categoryKeyResponse := new(CategoryKeyStatus)
 
@@ -530,7 +546,7 @@ func (op Operations) ListCategories(ctx context.Context, getEntitiesRequest *Cat
 // @param name The name of the entity.
 // @return error.
 func (op Operations) DeleteCategoryKey(ctx context.Context, name string) error {
-	path := "/categories/" + name
+	path := categoriesPath + name
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	if err != nil {
@@ -546,7 +562,7 @@ func (op Operations) DeleteCategoryKey(ctx context.Context, name string) error {
 // @param name The name of the entity.
 // @return *CategoryKeyStatus.
 func (op Operations) GetCategoryKey(ctx context.Context, name string) (*CategoryKeyStatus, error) {
-	path := "/categories/" + name
+	path := categoriesPath + name
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	categoryKeyStatusResponse := new(CategoryKeyStatus)
 
@@ -574,7 +590,7 @@ func (op Operations) ListCategoryValues(ctx context.Context, name string, getEnt
 	return categoryValueListResponse, op.client.Do(ctx, req, categoryValueListResponse)
 }
 
-// CreateOrUpdateCategoryValue ...
+// CreateOrUpdateCategoryValue performs the create or update category value operation.
 func (op Operations) CreateOrUpdateCategoryValue(ctx context.Context, name string, body *CategoryValue) (*CategoryValueStatus, error) {
 	path := fmt.Sprintf("/categories/%s/%s", name, ptr.Deref(body.Value, ""))
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
@@ -662,7 +678,7 @@ func (op Operations) CreateNetworkSecurityRule(ctx context.Context, request *Net
 // @param uuid The uuid of the entity.
 // @return void.
 func (op Operations) DeleteNetworkSecurityRule(ctx context.Context, uuid string) (*DeleteResponse, error) {
-	path := "/network_security_rules/" + uuid
+	path := networkSecurityRulesPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	deleteResponse := new(DeleteResponse)
@@ -680,7 +696,7 @@ func (op Operations) DeleteNetworkSecurityRule(ctx context.Context, uuid string)
 // @param uuid The uuid of the entity.
 // @return *NetworkSecurityRuleIntentResponse.
 func (op Operations) GetNetworkSecurityRule(ctx context.Context, uuid string) (*NetworkSecurityRuleIntentResponse, error) {
-	path := "/network_security_rules/" + uuid
+	path := networkSecurityRulesPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	networkSecurityRuleIntentResponse := new(NetworkSecurityRuleIntentResponse)
@@ -716,7 +732,7 @@ func (op Operations) ListNetworkSecurityRule(ctx context.Context, getEntitiesReq
 // @param body
 // @return void.
 func (op Operations) UpdateNetworkSecurityRule(ctx context.Context, uuid string, body *NetworkSecurityRuleIntentInput) (*NetworkSecurityRuleIntentResponse, error) {
-	path := "/network_security_rules/" + uuid
+	path := networkSecurityRulesPath + uuid
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	networkSecurityRuleIntentResponse := new(NetworkSecurityRuleIntentResponse)
 
@@ -749,7 +765,7 @@ func (op Operations) CreateVolumeGroup(ctx context.Context, request *VolumeGroup
 // @param uuid The uuid of the entity.
 // @return void.
 func (op Operations) DeleteVolumeGroup(ctx context.Context, uuid string) error {
-	path := "/volume_groups/" + uuid
+	path := volumeGroupsPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	if err != nil {
@@ -765,7 +781,7 @@ func (op Operations) DeleteVolumeGroup(ctx context.Context, uuid string) error {
 // @param uuid The uuid of the entity.
 // @return *VolumeGroupResponse.
 func (op Operations) GetVolumeGroup(ctx context.Context, uuid string) (*VolumeGroupResponse, error) {
-	path := "/volume_groups/" + uuid
+	path := volumeGroupsPath + uuid
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	networkSecurityRuleResponse := new(VolumeGroupResponse)
 
@@ -799,7 +815,7 @@ func (op Operations) ListVolumeGroup(ctx context.Context, getEntitiesRequest *DS
 // @param body
 // @return void.
 func (op Operations) UpdateVolumeGroup(ctx context.Context, uuid string, body *VolumeGroupInput) (*VolumeGroupResponse, error) {
-	path := "/volume_groups/" + uuid
+	path := volumeGroupsPath + uuid
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	networkSecurityRuleResponse := new(VolumeGroupResponse)
 
@@ -812,7 +828,7 @@ func (op Operations) UpdateVolumeGroup(ctx context.Context, uuid string, body *V
 
 const itemsPerPage int64 = 100
 
-// ListAllVM ...
+// ListAllVM lists all vm entities.
 func (op Operations) ListAllVM(ctx context.Context, filter string) (*VMListIntentResponse, error) {
 	var (
 		resp     *VMListIntentResponse
@@ -846,7 +862,7 @@ func (op Operations) ListAllVM(ctx context.Context, filter string) (*VMListInten
 	return resp, nil
 }
 
-// ListAllSubnet ...
+// ListAllSubnet lists all subnet entities.
 func (op Operations) ListAllSubnet(ctx context.Context, filter string, clientSideFilters []*prismgoclient.AdditionalFilter) (*SubnetListIntentResponse, error) {
 	var (
 		resp     *SubnetListIntentResponse
@@ -881,7 +897,7 @@ func (op Operations) ListAllSubnet(ctx context.Context, filter string, clientSid
 	return resp, nil
 }
 
-// ListAllNetworkSecurityRule ...
+// ListAllNetworkSecurityRule lists all network security rule entities.
 func (op Operations) ListAllNetworkSecurityRule(ctx context.Context, filter string) (*NetworkSecurityRuleListIntentResponse, error) {
 	var (
 		resp     *NetworkSecurityRuleListIntentResponse
@@ -915,7 +931,7 @@ func (op Operations) ListAllNetworkSecurityRule(ctx context.Context, filter stri
 	return resp, nil
 }
 
-// ListAllImage ...
+// ListAllImage lists all image entities.
 func (op Operations) ListAllImage(ctx context.Context, filter string) (*ImageListIntentResponse, error) {
 	var (
 		resp     *ImageListIntentResponse
@@ -949,7 +965,7 @@ func (op Operations) ListAllImage(ctx context.Context, filter string) (*ImageLis
 	return resp, nil
 }
 
-// ListAllCluster ...
+// ListAllCluster lists all cluster entities.
 func (op Operations) ListAllCluster(ctx context.Context, filter string) (*ClusterListIntentResponse, error) {
 	var (
 		resp     *ClusterListIntentResponse
@@ -983,7 +999,7 @@ func (op Operations) ListAllCluster(ctx context.Context, filter string) (*Cluste
 	return resp, nil
 }
 
-// ListAllCategoryValues ListAllCluster ...
+// ListAllCategoryValues lists all category values entities.
 func (op Operations) ListAllCategoryValues(ctx context.Context, categoryName, filter string) (*CategoryValueListResponse, error) {
 	var (
 		resp     *CategoryValueListResponse
@@ -1020,7 +1036,7 @@ func (op Operations) ListAllCategoryValues(ctx context.Context, categoryName, fi
 	return resp, nil
 }
 
-// GetTask ...
+// GetTask retrieves the task entity.
 func (op Operations) GetTask(ctx context.Context, taskUUID string) (*TasksResponse, error) {
 	path := "/tasks/" + taskUUID
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
@@ -1033,7 +1049,7 @@ func (op Operations) GetTask(ctx context.Context, taskUUID string) (*TasksRespon
 	return tasksTesponse, op.client.Do(ctx, req, tasksTesponse)
 }
 
-// GetHost ...
+// GetHost retrieves the host entity.
 func (op Operations) GetHost(ctx context.Context, hostUUID string) (*HostResponse, error) {
 	path := "/hosts/" + hostUUID
 	host := new(HostResponse)
@@ -1046,7 +1062,7 @@ func (op Operations) GetHost(ctx context.Context, hostUUID string) (*HostRespons
 	return host, op.client.Do(ctx, req, host)
 }
 
-// ListHost ...
+// ListHost lists host entities.
 func (op Operations) ListHost(ctx context.Context, getEntitiesRequest *DSMetadata) (*HostListResponse, error) {
 	path := "/hosts/list"
 
@@ -1060,7 +1076,7 @@ func (op Operations) ListHost(ctx context.Context, getEntitiesRequest *DSMetadat
 	return hostList, op.client.Do(ctx, req, hostList)
 }
 
-// ListAllHost ...
+// ListAllHost lists all host entities.
 func (op Operations) ListAllHost(ctx context.Context) (*HostListResponse, error) {
 	resp, err := op.ListHost(ctx, &DSMetadata{
 		Kind: new("host"),
@@ -1095,7 +1111,7 @@ func (op Operations) CreateProject(ctx context.Context, request *Project) (*Proj
 // @param uuid The prject uuid - string.
 // @return *Project.
 func (op Operations) GetProject(ctx context.Context, projectUUID string) (*Project, error) {
-	path := "/projects/" + projectUUID
+	path := projectsPath + projectUUID
 	project := new(Project)
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
@@ -1166,7 +1182,7 @@ func (op Operations) ListAllProject(ctx context.Context, filter string) (*Projec
 // @param body - *Project
 // @return *Project, error.
 func (op Operations) UpdateProject(ctx context.Context, uuid string, body *Project) (*Project, error) {
-	path := "/projects/" + uuid
+	path := projectsPath + uuid
 	projectInput := new(Project)
 
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
@@ -1183,7 +1199,7 @@ func (op Operations) UpdateProject(ctx context.Context, uuid string, body *Proje
 // @param uuid The uuid of the entity.
 // @return void.
 func (op Operations) DeleteProject(ctx context.Context, uuid string) (*DeleteResponse, error) {
-	path := "/projects/" + uuid
+	path := projectsPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	deleteResponse := new(DeleteResponse)
@@ -1206,9 +1222,9 @@ func (op Operations) CreateAccessControlPolicy(ctx context.Context, request *Acc
 		return nil, err
 	}
 
-	AccessControlPolicyResponse := new(AccessControlPolicy)
+	accessControlPolicyResponse := new(AccessControlPolicy)
 
-	return AccessControlPolicyResponse, op.client.Do(ctx, req, AccessControlPolicyResponse)
+	return accessControlPolicyResponse, op.client.Do(ctx, req, accessControlPolicyResponse)
 }
 
 // GetAccessControlPolicy This operation gets a AccessControlPolicy.
@@ -1216,15 +1232,15 @@ func (op Operations) CreateAccessControlPolicy(ctx context.Context, request *Acc
 // @param uuid The access policy uuid - string.
 // @return *AccessControlPolicy.
 func (op Operations) GetAccessControlPolicy(ctx context.Context, accessControlPolicyUUID string) (*AccessControlPolicy, error) {
-	path := "/access_control_policies/" + accessControlPolicyUUID
-	AccessControlPolicy := new(AccessControlPolicy)
+	path := accessControlPoliciesPath + accessControlPolicyUUID
+	accessControlPolicy := new(AccessControlPolicy)
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return AccessControlPolicy, op.client.Do(ctx, req, AccessControlPolicy)
+	return accessControlPolicy, op.client.Do(ctx, req, accessControlPolicy)
 }
 
 // ListAccessControlPolicy gets a list of AccessControlPolicys.
@@ -1234,14 +1250,14 @@ func (op Operations) GetAccessControlPolicy(ctx context.Context, accessControlPo
 func (op Operations) ListAccessControlPolicy(ctx context.Context, getEntitiesRequest *DSMetadata) (*AccessControlPolicyListResponse, error) {
 	path := "/access_control_policies/list"
 
-	AccessControlPolicyList := new(AccessControlPolicyListResponse)
+	accessControlPolicyList := new(AccessControlPolicyListResponse)
 
 	req, err := op.client.NewRequest(http.MethodPost, path, getEntitiesRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	return AccessControlPolicyList, op.client.Do(ctx, req, AccessControlPolicyList)
+	return accessControlPolicyList, op.client.Do(ctx, req, accessControlPolicyList)
 }
 
 // ListAllAccessControlPolicy gets a list of AccessControlPolicys
@@ -1287,15 +1303,15 @@ func (op Operations) ListAllAccessControlPolicy(ctx context.Context, filter stri
 // @param body - *AccessControlPolicy
 // @return *AccessControlPolicy, error.
 func (op Operations) UpdateAccessControlPolicy(ctx context.Context, uuid string, body *AccessControlPolicy) (*AccessControlPolicy, error) {
-	path := "/access_control_policies/" + uuid
-	AccessControlPolicyInput := new(AccessControlPolicy)
+	path := accessControlPoliciesPath + uuid
+	accessControlPolicyInput := new(AccessControlPolicy)
 
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	if err != nil {
 		return nil, err
 	}
 
-	return AccessControlPolicyInput, op.client.Do(ctx, req, AccessControlPolicyInput)
+	return accessControlPolicyInput, op.client.Do(ctx, req, accessControlPolicyInput)
 }
 
 // DeleteAccessControlPolicy Deletes a AccessControlPolicy
@@ -1304,7 +1320,7 @@ func (op Operations) UpdateAccessControlPolicy(ctx context.Context, uuid string,
 // @param uuid The uuid of the entity.
 // @return void.
 func (op Operations) DeleteAccessControlPolicy(ctx context.Context, uuid string) (*DeleteResponse, error) {
-	path := "/access_control_policies/" + uuid
+	path := accessControlPoliciesPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	deleteResponse := new(DeleteResponse)
@@ -1327,9 +1343,9 @@ func (op Operations) CreateRole(ctx context.Context, request *Role) (*Role, erro
 		return nil, err
 	}
 
-	RoleResponse := new(Role)
+	roleResponse := new(Role)
 
-	return RoleResponse, op.client.Do(ctx, req, RoleResponse)
+	return roleResponse, op.client.Do(ctx, req, roleResponse)
 }
 
 // GetRole This operation gets a role.
@@ -1337,15 +1353,15 @@ func (op Operations) CreateRole(ctx context.Context, request *Role) (*Role, erro
 // @param uuid The role uuid - string.
 // @return *Role.
 func (op Operations) GetRole(ctx context.Context, roleUUID string) (*Role, error) {
-	path := "/roles/" + roleUUID
-	Role := new(Role)
+	path := rolesPath + roleUUID
+	role := new(Role)
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return Role, op.client.Do(ctx, req, Role)
+	return role, op.client.Do(ctx, req, role)
 }
 
 // ListRole gets a list of roles.
@@ -1355,14 +1371,14 @@ func (op Operations) GetRole(ctx context.Context, roleUUID string) (*Role, error
 func (op Operations) ListRole(ctx context.Context, getEntitiesRequest *DSMetadata) (*RoleListResponse, error) {
 	path := "/roles/list"
 
-	RoleList := new(RoleListResponse)
+	roleList := new(RoleListResponse)
 
 	req, err := op.client.NewRequest(http.MethodPost, path, getEntitiesRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	return RoleList, op.client.Do(ctx, req, RoleList)
+	return roleList, op.client.Do(ctx, req, roleList)
 }
 
 // ListAllRole gets a list of Roles
@@ -1408,15 +1424,15 @@ func (op Operations) ListAllRole(ctx context.Context, filter string) (*RoleListR
 // @param body - *Role
 // @return *Role, error.
 func (op Operations) UpdateRole(ctx context.Context, uuid string, body *Role) (*Role, error) {
-	path := "/roles/" + uuid
-	RoleInput := new(Role)
+	path := rolesPath + uuid
+	roleInput := new(Role)
 
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	if err != nil {
 		return nil, err
 	}
 
-	return RoleInput, op.client.Do(ctx, req, RoleInput)
+	return roleInput, op.client.Do(ctx, req, roleInput)
 }
 
 // DeleteRole Deletes a role
@@ -1425,7 +1441,7 @@ func (op Operations) UpdateRole(ctx context.Context, uuid string, body *Role) (*
 // @param uuid The uuid of the entity.
 // @return void.
 func (op Operations) DeleteRole(ctx context.Context, uuid string) (*DeleteResponse, error) {
-	path := "/roles/" + uuid
+	path := rolesPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	deleteResponse := new(DeleteResponse)
@@ -1448,9 +1464,9 @@ func (op Operations) CreateUser(ctx context.Context, request *UserIntentInput) (
 		return nil, err
 	}
 
-	UserIntentResponse := new(UserIntentResponse)
+	userIntentResponse := new(UserIntentResponse)
 
-	return UserIntentResponse, op.client.Do(ctx, req, UserIntentResponse)
+	return userIntentResponse, op.client.Do(ctx, req, userIntentResponse)
 }
 
 // GetUser This operation gets a User.
@@ -1458,15 +1474,15 @@ func (op Operations) CreateUser(ctx context.Context, request *UserIntentInput) (
 // @param uuid The user uuid - string.
 // @return *User.
 func (op Operations) GetUser(ctx context.Context, userUUID string) (*UserIntentResponse, error) {
-	path := "/users/" + userUUID
-	User := new(UserIntentResponse)
+	path := usersPath + userUUID
+	user := new(UserIntentResponse)
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return User, op.client.Do(ctx, req, User)
+	return user, op.client.Do(ctx, req, user)
 }
 
 // UpdateUser Updates a User
@@ -1475,15 +1491,15 @@ func (op Operations) GetUser(ctx context.Context, userUUID string) (*UserIntentR
 // @param body - *User
 // @return *User, error.
 func (op Operations) UpdateUser(ctx context.Context, uuid string, body *UserIntentInput) (*UserIntentResponse, error) {
-	path := "/users/" + uuid
-	UserInput := new(UserIntentResponse)
+	path := usersPath + uuid
+	userInput := new(UserIntentResponse)
 
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	if err != nil {
 		return nil, err
 	}
 
-	return UserInput, op.client.Do(ctx, req, UserInput)
+	return userInput, op.client.Do(ctx, req, userInput)
 }
 
 // DeleteUser Deletes a User
@@ -1492,7 +1508,7 @@ func (op Operations) UpdateUser(ctx context.Context, uuid string, body *UserInte
 // @param uuid The uuid of the entity.
 // @return void.
 func (op Operations) DeleteUser(ctx context.Context, uuid string) (*DeleteResponse, error) {
-	path := "/users/" + uuid
+	path := usersPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	deleteResponse := new(DeleteResponse)
@@ -1511,17 +1527,17 @@ func (op Operations) DeleteUser(ctx context.Context, uuid string) (*DeleteRespon
 func (op Operations) ListUser(ctx context.Context, getEntitiesRequest *DSMetadata) (*UserListResponse, error) {
 	path := "/users/list"
 
-	UserList := new(UserListResponse)
+	userList := new(UserListResponse)
 
 	req, err := op.client.NewRequest(http.MethodPost, path, getEntitiesRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	return UserList, op.client.Do(ctx, req, UserList)
+	return userList, op.client.Do(ctx, req, userList)
 }
 
-// ListAllUser ...
+// ListAllUser lists all user entities.
 func (op Operations) ListAllUser(ctx context.Context, filter string) (*UserListResponse, error) {
 	var (
 		resp     *UserListResponse
@@ -1581,14 +1597,14 @@ func (op Operations) GetCurrentLoggedInUser(ctx context.Context) (*UserIntentRes
 // @return *User.
 func (op Operations) GetUserGroup(ctx context.Context, userGroupUUID string) (*UserGroupIntentResponse, error) {
 	path := "/user_groups/" + userGroupUUID
-	User := new(UserGroupIntentResponse)
+	user := new(UserGroupIntentResponse)
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return User, op.client.Do(ctx, req, User)
+	return user, op.client.Do(ctx, req, user)
 }
 
 // ListUserGroup gets a list of UserGroups.
@@ -1598,17 +1614,17 @@ func (op Operations) GetUserGroup(ctx context.Context, userGroupUUID string) (*U
 func (op Operations) ListUserGroup(ctx context.Context, getEntitiesRequest *DSMetadata) (*UserGroupListResponse, error) {
 	path := "/user_groups/list"
 
-	UserGroupList := new(UserGroupListResponse)
+	userGroupList := new(UserGroupListResponse)
 
 	req, err := op.client.NewRequest(http.MethodPost, path, getEntitiesRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	return UserGroupList, op.client.Do(ctx, req, UserGroupList)
+	return userGroupList, op.client.Do(ctx, req, userGroupList)
 }
 
-// ListAllUserGroup ...
+// ListAllUserGroup lists all user group entities.
 func (op Operations) ListAllUserGroup(ctx context.Context, filter string) (*UserGroupListResponse, error) {
 	var (
 		resp     *UserGroupListResponse
@@ -1665,17 +1681,17 @@ func (op Operations) GetPermission(ctx context.Context, permissionUUID string) (
 func (op Operations) ListPermission(ctx context.Context, getEntitiesRequest *DSMetadata) (*PermissionListResponse, error) {
 	path := "/permissions/list"
 
-	PermissionList := new(PermissionListResponse)
+	permissionList := new(PermissionListResponse)
 
 	req, err := op.client.NewRequest(http.MethodPost, path, getEntitiesRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	return PermissionList, op.client.Do(ctx, req, PermissionList)
+	return permissionList, op.client.Do(ctx, req, permissionList)
 }
 
-// ListAllPermission ...
+// ListAllPermission lists all permission entities.
 func (op Operations) ListAllPermission(ctx context.Context, filter string) (*PermissionListResponse, error) {
 	var (
 		resp     *PermissionListResponse
@@ -1709,9 +1725,9 @@ func (op Operations) ListAllPermission(ctx context.Context, filter string) (*Per
 	return resp, nil
 }
 
-// GetProtectionRule ...
+// GetProtectionRule retrieves the protection rule entity.
 func (op Operations) GetProtectionRule(ctx context.Context, uuid string) (*ProtectionRuleResponse, error) {
-	path := "/protection_rules/" + uuid
+	path := protectionRulesPath + uuid
 	protectionRule := new(ProtectionRuleResponse)
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
@@ -1722,7 +1738,7 @@ func (op Operations) GetProtectionRule(ctx context.Context, uuid string) (*Prote
 	return protectionRule, op.client.Do(ctx, req, protectionRule)
 }
 
-// ListProtectionRules ...
+// ListProtectionRules lists protection rules entities.
 func (op Operations) ListProtectionRules(ctx context.Context, getEntitiesRequest *DSMetadata) (*ProtectionRulesListResponse, error) {
 	path := "/protection_rules/list"
 
@@ -1736,7 +1752,7 @@ func (op Operations) ListProtectionRules(ctx context.Context, getEntitiesRequest
 	return list, op.client.Do(ctx, req, list)
 }
 
-// ListAllProtectionRules ...
+// ListAllProtectionRules lists all protection rules entities.
 func (op Operations) ListAllProtectionRules(ctx context.Context, filter string) (*ProtectionRulesListResponse, error) {
 	var (
 		resp     *ProtectionRulesListResponse
@@ -1770,7 +1786,7 @@ func (op Operations) ListAllProtectionRules(ctx context.Context, filter string) 
 	return resp, nil
 }
 
-// CreateProtectionRule ...
+// CreateProtectionRule performs the create protection rule operation.
 func (op Operations) CreateProtectionRule(ctx context.Context, createRequest *ProtectionRuleInput) (*ProtectionRuleResponse, error) {
 	req, err := op.client.NewRequest(http.MethodPost, "/protection_rules", createRequest)
 	protectionRuleResponse := new(ProtectionRuleResponse)
@@ -1782,9 +1798,9 @@ func (op Operations) CreateProtectionRule(ctx context.Context, createRequest *Pr
 	return protectionRuleResponse, op.client.Do(ctx, req, protectionRuleResponse)
 }
 
-// UpdateProtectionRule ...
+// UpdateProtectionRule performs the update protection rule operation.
 func (op Operations) UpdateProtectionRule(ctx context.Context, uuid string, body *ProtectionRuleInput) (*ProtectionRuleResponse, error) {
-	path := "/protection_rules/" + uuid
+	path := protectionRulesPath + uuid
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	protectionRuleResponse := new(ProtectionRuleResponse)
 
@@ -1795,9 +1811,9 @@ func (op Operations) UpdateProtectionRule(ctx context.Context, uuid string, body
 	return protectionRuleResponse, op.client.Do(ctx, req, protectionRuleResponse)
 }
 
-// DeleteProtectionRule ...
+// DeleteProtectionRule performs the delete protection rule operation.
 func (op Operations) DeleteProtectionRule(ctx context.Context, uuid string) (*DeleteResponse, error) {
-	path := "/protection_rules/" + uuid
+	path := protectionRulesPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	deleteResponse := new(DeleteResponse)
@@ -1824,20 +1840,20 @@ func (op Operations) ProcessProtectionRule(ctx context.Context, uuid string) err
 	return op.client.Do(ctx, req, nil)
 }
 
-// GetRecoveryPlan ...
+// GetRecoveryPlan retrieves the recovery plan entity.
 func (op Operations) GetRecoveryPlan(ctx context.Context, uuid string) (*models.RecoveryPlanIntentResponse, error) {
-	path := "/recovery_plans/" + uuid
-	RecoveryPlan := new(models.RecoveryPlanIntentResponse)
+	path := recoveryPlansPath + uuid
+	recoveryPlan := new(models.RecoveryPlanIntentResponse)
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return RecoveryPlan, op.client.Do(ctx, req, RecoveryPlan)
+	return recoveryPlan, op.client.Do(ctx, req, recoveryPlan)
 }
 
-// ListRecoveryPlans ...
+// ListRecoveryPlans lists recovery plans entities.
 func (op Operations) ListRecoveryPlans(ctx context.Context, getEntitiesRequest *DSMetadata) (*models.RecoveryPlanListIntentResponse, error) {
 	path := "/recovery_plans/list"
 
@@ -1851,7 +1867,7 @@ func (op Operations) ListRecoveryPlans(ctx context.Context, getEntitiesRequest *
 	return list, op.client.Do(ctx, req, list)
 }
 
-// ListAllRecoveryPlans ...
+// ListAllRecoveryPlans lists all recovery plans entities.
 func (op Operations) ListAllRecoveryPlans(ctx context.Context, filter string) (*models.RecoveryPlanListIntentResponse, error) {
 	var (
 		resp     *models.RecoveryPlanListIntentResponse
@@ -1885,34 +1901,34 @@ func (op Operations) ListAllRecoveryPlans(ctx context.Context, filter string) (*
 	return resp, nil
 }
 
-// CreateRecoveryPlan ...
+// CreateRecoveryPlan performs the create recovery plan operation.
 func (op Operations) CreateRecoveryPlan(ctx context.Context, createRequest *models.RecoveryPlanIntentInput) (*models.RecoveryPlanIntentResponse, error) {
 	req, err := op.client.NewRequest(http.MethodPost, "/recovery_plans", createRequest)
-	RecoveryPlanResponse := new(models.RecoveryPlanIntentResponse)
+	recoveryPlanResponse := new(models.RecoveryPlanIntentResponse)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return RecoveryPlanResponse, op.client.Do(ctx, req, RecoveryPlanResponse)
+	return recoveryPlanResponse, op.client.Do(ctx, req, recoveryPlanResponse)
 }
 
-// UpdateRecoveryPlan ...
+// UpdateRecoveryPlan performs the update recovery plan operation.
 func (op Operations) UpdateRecoveryPlan(ctx context.Context, uuid string, body *models.RecoveryPlanIntentInput) (*models.RecoveryPlanIntentResponse, error) {
-	path := "/recovery_plans/" + uuid
+	path := recoveryPlansPath + uuid
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
-	RecoveryPlanResponse := new(models.RecoveryPlanIntentResponse)
+	recoveryPlanResponse := new(models.RecoveryPlanIntentResponse)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return RecoveryPlanResponse, op.client.Do(ctx, req, RecoveryPlanResponse)
+	return recoveryPlanResponse, op.client.Do(ctx, req, recoveryPlanResponse)
 }
 
-// DeleteRecoveryPlan ...
+// DeleteRecoveryPlan performs the delete recovery plan operation.
 func (op Operations) DeleteRecoveryPlan(ctx context.Context, uuid string) (*DeleteResponse, error) {
-	path := "/recovery_plans/" + uuid
+	path := recoveryPlansPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	deleteResponse := new(DeleteResponse)
@@ -1924,31 +1940,34 @@ func (op Operations) DeleteRecoveryPlan(ctx context.Context, uuid string) (*Dele
 	return deleteResponse, op.client.Do(ctx, req, deleteResponse)
 }
 
+// GetServiceGroup retrieves the service group entity.
 func (op Operations) GetServiceGroup(ctx context.Context, uuid string) (*ServiceGroupResponse, error) {
-	path := "/service_groups/" + uuid
-	ServiceGroup := new(ServiceGroupResponse)
+	path := serviceGroupsPath + uuid
+	serviceGroup := new(ServiceGroupResponse)
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return ServiceGroup, op.client.Do(ctx, req, ServiceGroup)
+	return serviceGroup, op.client.Do(ctx, req, serviceGroup)
 }
 
+// CreateServiceGroup performs the create service group operation.
 func (op Operations) CreateServiceGroup(ctx context.Context, request *ServiceGroupInput) (*Reference, error) {
 	req, err := op.client.NewRequest(http.MethodPost, "/service_groups", request)
-	ServiceGroup := new(Reference)
+	serviceGroup := new(Reference)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return ServiceGroup, op.client.Do(ctx, req, ServiceGroup)
+	return serviceGroup, op.client.Do(ctx, req, serviceGroup)
 }
 
+// DeleteServiceGroup performs the delete service group operation.
 func (op Operations) DeleteServiceGroup(ctx context.Context, uuid string) error {
-	path := "/service_groups/" + uuid
+	path := serviceGroupsPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	if err != nil {
@@ -1958,6 +1977,7 @@ func (op Operations) DeleteServiceGroup(ctx context.Context, uuid string) error 
 	return op.client.Do(ctx, req, nil)
 }
 
+// ListAllServiceGroups lists all service groups entities.
 func (op Operations) ListAllServiceGroups(ctx context.Context, filter string) (*ServiceGroupListResponse, error) {
 	var (
 		resp     *ServiceGroupListResponse
@@ -2004,8 +2024,9 @@ func (op Operations) listServiceGroups(ctx context.Context, getEntitiesRequest *
 	return list, op.client.Do(ctx, req, list)
 }
 
+// UpdateServiceGroup performs the update service group operation.
 func (op Operations) UpdateServiceGroup(ctx context.Context, uuid string, body *ServiceGroupInput) error {
-	path := "/service_groups/" + uuid
+	path := serviceGroupsPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	if err != nil {
@@ -2015,18 +2036,20 @@ func (op Operations) UpdateServiceGroup(ctx context.Context, uuid string, body *
 	return op.client.Do(ctx, req, nil)
 }
 
+// GetAddressGroup retrieves the address group entity.
 func (op Operations) GetAddressGroup(ctx context.Context, uuid string) (*AddressGroupResponse, error) {
-	path := "/address_groups/" + uuid
-	AddressGroup := new(AddressGroupResponse)
+	path := addressGroupsPath + uuid
+	addressGroup := new(AddressGroupResponse)
 
 	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return AddressGroup, op.client.Do(ctx, req, AddressGroup)
+	return addressGroup, op.client.Do(ctx, req, addressGroup)
 }
 
+// ListAllAddressGroups lists all address groups entities.
 func (op Operations) ListAllAddressGroups(ctx context.Context, filter string) (*AddressGroupListResponse, error) {
 	var (
 		resp     *AddressGroupListResponse
@@ -2060,6 +2083,7 @@ func (op Operations) ListAllAddressGroups(ctx context.Context, filter string) (*
 	return resp, nil
 }
 
+// ListAddressGroups lists address groups entities.
 func (op Operations) ListAddressGroups(ctx context.Context, getEntitiesRequest *DSMetadata) (*AddressGroupListResponse, error) {
 	path := "/address_groups/list"
 
@@ -2073,8 +2097,9 @@ func (op Operations) ListAddressGroups(ctx context.Context, getEntitiesRequest *
 	return list, op.client.Do(ctx, req, list)
 }
 
+// DeleteAddressGroup performs the delete address group operation.
 func (op Operations) DeleteAddressGroup(ctx context.Context, uuid string) error {
-	path := "/address_groups/" + uuid
+	path := addressGroupsPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodDelete, path, nil)
 	if err != nil {
@@ -2084,19 +2109,21 @@ func (op Operations) DeleteAddressGroup(ctx context.Context, uuid string) error 
 	return op.client.Do(ctx, req, nil)
 }
 
+// CreateAddressGroup performs the create address group operation.
 func (op Operations) CreateAddressGroup(ctx context.Context, request *AddressGroupInput) (*Reference, error) {
 	req, err := op.client.NewRequest(http.MethodPost, "/address_groups", request)
-	AddressGroup := new(Reference)
+	addressGroup := new(Reference)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return AddressGroup, op.client.Do(ctx, req, AddressGroup)
+	return addressGroup, op.client.Do(ctx, req, addressGroup)
 }
 
+// UpdateAddressGroup performs the update address group operation.
 func (op Operations) UpdateAddressGroup(ctx context.Context, uuid string, body *AddressGroupInput) error {
-	path := "/address_groups/" + uuid
+	path := addressGroupsPath + uuid
 
 	req, err := op.client.NewRequest(http.MethodPut, path, body)
 	if err != nil {

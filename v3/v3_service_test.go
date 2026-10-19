@@ -90,62 +90,38 @@ func TestOperations_CreateSubnet(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		createRequest *SubnetIntentInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *SubnetIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateSubnet",
-			fields{
-				client,
+	createRequest := &SubnetIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("subnet"),
+		},
+		Spec: &models.Subnet{
+			ClusterReference: &models.ClusterReference{
+				Kind: "cluster",
+				UUID: new("00056024-6c13-4c74-0000-00000000ecb5"),
 			},
-			args{
-				&SubnetIntentInput{
-					APIVersion: new("3.1"),
-					Metadata: &Metadata{
-						Kind: new("subnet"),
-					},
-					Spec: &models.Subnet{
-						ClusterReference: &models.ClusterReference{
-							Kind: "cluster",
-							UUID: new("00056024-6c13-4c74-0000-00000000ecb5"),
-						},
-						Name: new("subnet.create"),
-					},
-				},
-			},
-			&SubnetIntentResponse{
-				APIVersion: new("3.1"),
-				Metadata: &Metadata{
-					Kind: new("subnet"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+			Name: new("subnet.create"),
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateSubnet(context.Background(), testCase.args.createRequest)
-			testOperationResult(t, "CreateSubnet", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &SubnetIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("subnet"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateSubnet", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateSubnet(context.Background(), createRequest)
+		testOperationResult(t, "CreateSubnet", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteSubnet(t *testing.T) {
@@ -258,64 +234,40 @@ func TestOperations_UpdateSubnet(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *SubnetIntentInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *SubnetIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test UpdateSubnet",
-			fields{
-				client,
+	body := &SubnetIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("subnet"),
+		},
+		Spec: &models.Subnet{
+			ClusterReference: &models.ClusterReference{
+				Kind: "cluster",
+				UUID: new("00056024-6c13-4c74-0000-00000000ecb5"),
 			},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&SubnetIntentInput{
-					APIVersion: new("3.1"),
-					Metadata: &Metadata{
-						Kind: new("subnet"),
-					},
-					Spec: &models.Subnet{
-						ClusterReference: &models.ClusterReference{
-							Kind: "cluster",
-							UUID: new("00056024-6c13-4c74-0000-00000000ecb5"),
-						},
-						Name: new("subnet.create"),
-					},
-				},
-			},
-			&SubnetIntentResponse{
-				APIVersion: new("3.1"),
-				Metadata: &Metadata{
-					Kind: new("subnet"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+			Name: new("subnet.create"),
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.UpdateSubnet(context.Background(), testCase.args.UUID, testCase.args.body)
-			testOperationResult(t, "UpdateSubnet", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &SubnetIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("subnet"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test UpdateSubnet", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateSubnet(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateSubnet", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateImage(t *testing.T) {
@@ -363,65 +315,41 @@ func TestOperations_CreateImage(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		body *ImageIntentInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ImageIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateImage",
-			fields{
-				client,
-			},
-			args{
-				&ImageIntentInput{
-					APIVersion: new("3.1"),
-					Metadata: &Metadata{
-						Kind: new("image"),
-					},
-					Spec: &Image{
-						Name: new("image.create"),
-						Resources: &ImageResources{
-							ImageType: new("DISK_IMAGE"),
-							DataSourceReference: &Reference{
-								Kind: new("vm_disk"),
-								UUID: new("0005a238-f165-08ba-317e-ac1f6b6e5442"),
-							},
-						},
-					},
+	body := &ImageIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("image"),
+		},
+		Spec: &Image{
+			Name: new("image.create"),
+			Resources: &ImageResources{
+				ImageType: new("DISK_IMAGE"),
+				DataSourceReference: &Reference{
+					Kind: new("vm_disk"),
+					UUID: new("0005a238-f165-08ba-317e-ac1f6b6e5442"),
 				},
 			},
-			&ImageIntentResponse{
-				APIVersion: new("3.1"),
-				Metadata: &Metadata{
-					Kind: new("image"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateImage(context.Background(), testCase.args.body)
-			testOperationResult(t, "CreateImage", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &ImageIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("image"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateImage", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateImage(context.Background(), body)
+		testOperationResult(t, "CreateImage", got, expected, err, false)
+	})
 }
 
 func TestOperations_UploadImageError(t *testing.T) {
@@ -429,39 +357,20 @@ func TestOperations_UploadImageError(t *testing.T) {
 
 	defer server.Close()
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID     string
-		filepath string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		{
-			"Test UploadImage ERROR (Cannot Open File)",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc", "xx"},
-			true,
-		},
-	}
+	filepath := "xx"
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-			if err := op.UploadImage(context.Background(), testCase.args.UUID, testCase.args.filepath); (err != nil) != testCase.wantErr {
-				t.Errorf("Operations.UploadImage() error = %v, wantErr %v", err, testCase.wantErr)
-			}
-		})
-	}
+	t.Run("Test UploadImage ERROR (Cannot Open File)", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+		if err := op.UploadImage(context.Background(), uuid, filepath); (err != nil) != true {
+			t.Errorf("Operations.UploadImage() error = %v, wantErr %v", err, true)
+		}
+	})
 }
 
 func TestOperations_UploadImage(t *testing.T) {
@@ -480,37 +389,20 @@ func TestOperations_UploadImage(t *testing.T) {
 		}
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID     string
-		filepath string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		{
-			"TestOperations_UploadImage Upload Image",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc", "v3.go"},
-		},
-	}
+	filepath := "v3.go"
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			if err := op.UploadImage(context.Background(), tt.args.UUID, tt.args.filepath); err != nil {
-				t.Errorf("Operations.UploadImage() error = %v", err)
-			}
-		})
-	}
+	t.Run("TestOperations_UploadImage Upload Image", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+		if err := op.UploadImage(context.Background(), uuid, filepath); err != nil {
+			t.Errorf("Operations.UploadImage() error = %v", err)
+		}
+	})
 }
 
 func TestOperations_DeleteImage(t *testing.T) {
@@ -597,40 +489,20 @@ func TestOperations_GetImage(t *testing.T) {
 		Kind: new("image"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ImageIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test GetImage OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetImage OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetImage(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetImage", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetImage(context.Background(), uuid)
+		testOperationResult(t, "GetImage", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListImage(t *testing.T) {
@@ -656,40 +528,20 @@ func TestOperations_ListImage(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ImageListIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test ListImage OK",
-			fields{client},
-			args{input},
-			list,
-			false,
-		},
-	}
+	expected := list
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test ListImage OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.ListImage(context.Background(), testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListImage", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListImage(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListImage", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateImage(t *testing.T) {
@@ -733,63 +585,39 @@ func TestOperations_UpdateImage(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *ImageIntentInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ImageIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test UpdateVM",
-			fields{
-				client,
+	body := &ImageIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("image"),
+		},
+		Spec: &Image{
+			Resources: &ImageResources{
+				ImageType: new("DISK_IMAGE"),
 			},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&ImageIntentInput{
-					APIVersion: new("3.1"),
-					Metadata: &Metadata{
-						Kind: new("image"),
-					},
-					Spec: &Image{
-						Resources: &ImageResources{
-							ImageType: new("DISK_IMAGE"),
-						},
-						Name: new("image.update"),
-					},
-				},
-			},
-			&ImageIntentResponse{
-				APIVersion: new("3.1"),
-				Metadata: &Metadata{
-					Kind: new("image"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+			Name: new("image.update"),
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.UpdateImage(context.Background(), testCase.args.UUID, testCase.args.body)
-			testOperationResult(t, "UpdateImage", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &ImageIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("image"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test UpdateVM", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateImage(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateImage", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateOrUpdateCategoryKey(t *testing.T) {
@@ -823,47 +651,27 @@ func TestOperations_CreateOrUpdateCategoryKey(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
+	operationClient := client
+
+	body := &CategoryKey{
+		Description: new("Testing Keys"),
+		Name:        new("test_category_key"),
 	}
 
-	type args struct {
-		body *CategoryKey
+	expected := &CategoryKeyStatus{
+		Description:   new("Testing Keys"),
+		Name:          new("test_category_key"),
+		SystemDefined: new(false),
 	}
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryKeyStatus
-		wantErr bool
-	}{
-		{
-			"Test CreateOrUpdateCaegoryKey OK",
-			fields{client},
-			args{&CategoryKey{
-				Description: new("Testing Keys"),
-				Name:        new("test_category_key"),
-			}},
-			&CategoryKeyStatus{
-				Description:   new("Testing Keys"),
-				Name:          new("test_category_key"),
-				SystemDefined: new(false),
-			},
-			false,
-		},
-	}
+	t.Run("Test CreateOrUpdateCaegoryKey OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateOrUpdateCategoryKey(context.Background(), testCase.args.body)
-			testOperationResult(t, "CreateOrUpdateCategoryKey", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.CreateOrUpdateCategoryKey(context.Background(), body)
+		testOperationResult(t, "CreateOrUpdateCategoryKey", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListCategories(t *testing.T) {
@@ -889,40 +697,20 @@ func TestOperations_ListCategories(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *CategoryListMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryKeyListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListCategoryKey OK",
-			fields{client},
-			args{input},
-			list,
-			false,
-		},
-	}
+	expected := list
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test ListCategoryKey OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.ListCategories(context.Background(), testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListCategories", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListCategories(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListCategories", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteCategoryKey(t *testing.T) {
@@ -996,40 +784,20 @@ func TestOperations_GetCategoryKey(t *testing.T) {
 		SystemDefined: new(false),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		name string
-	}
+	name := "test_category_key"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryKeyStatus
-		wantErr bool
-	}{
-		{
-			"Test GetCategory OK",
-			fields{client},
-			args{"test_category_key"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetCategory OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetCategoryKey(context.Background(), testCase.args.name)
-			testOperationResult(t, "GetCategoryKey", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetCategoryKey(context.Background(), name)
+		testOperationResult(t, "GetCategoryKey", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListCategoryValues(t *testing.T) {
@@ -1055,41 +823,22 @@ func TestOperations_ListCategoryValues(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		name               string
-		getEntitiesRequest *CategoryListMetadata
-	}
+	name := "test_category_key"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryValueListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListCategoryKey OK",
-			fields{client},
-			args{"test_category_key", input},
-			list,
-			false,
-		},
-	}
+	getEntitiesRequest := input
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	expected := list
 
-			got, err := op.ListCategoryValues(context.Background(), testCase.args.name, testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListCategoryValues", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+	t.Run("Test ListCategoryKey OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListCategoryValues(context.Background(), name, getEntitiesRequest)
+		testOperationResult(t, "ListCategoryValues", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateOrUpdateCategoryValue(t *testing.T) {
@@ -1124,49 +873,30 @@ func TestOperations_CreateOrUpdateCategoryValue(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
+	operationClient := client
+
+	name := "test_category_key"
+
+	body := &CategoryValue{
+		Description: new("Testing Value"),
+		Value:       new("test_category_value"),
 	}
 
-	type args struct {
-		name string
-		body *CategoryValue
+	expected := &CategoryValueStatus{
+		Description:   new("Testing Value"),
+		Value:         new("test_category_value"),
+		Name:          new("test_category_key"),
+		SystemDefined: new(false),
 	}
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryValueStatus
-		wantErr bool
-	}{
-		{
-			"Test CreateOrUpdateCategoryValue OK",
-			fields{client},
-			args{"test_category_key", &CategoryValue{
-				Description: new("Testing Value"),
-				Value:       new("test_category_value"),
-			}},
-			&CategoryValueStatus{
-				Description:   new("Testing Value"),
-				Value:         new("test_category_value"),
-				Name:          new("test_category_key"),
-				SystemDefined: new(false),
-			},
-			false,
-		},
-	}
+	t.Run("Test CreateOrUpdateCategoryValue OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateOrUpdateCategoryValue(context.Background(), testCase.args.name, testCase.args.body)
-			testOperationResult(t, "CreateOrUpdateCategoryValue", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.CreateOrUpdateCategoryValue(context.Background(), name, body)
+		testOperationResult(t, "CreateOrUpdateCategoryValue", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetCategoryValue(t *testing.T) {
@@ -1192,41 +922,22 @@ func TestOperations_GetCategoryValue(t *testing.T) {
 		SystemDefined: new(false),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		name  string
-		value string
-	}
+	name := "test_category_key"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryValueStatus
-		wantErr bool
-	}{
-		{
-			"Test GetCategoryValue OK",
-			fields{client},
-			args{"test_category_key", "test_category_value"},
-			response,
-			false,
-		},
-	}
+	value := "test_category_value"
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	expected := response
 
-			got, err := op.GetCategoryValue(context.Background(), testCase.args.name, testCase.args.value)
-			testOperationResult(t, "GetCategoryValue", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+	t.Run("Test GetCategoryValue OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetCategoryValue(context.Background(), name, value)
+		testOperationResult(t, "GetCategoryValue", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteCategoryValue(t *testing.T) {
@@ -1301,40 +1012,20 @@ func TestOperations_GetCategoryQuery(t *testing.T) {
 		UsageType: new("APPLIED_TO"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		query *CategoryQueryInput
-	}
+	query := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryQueryResponse
-		wantErr bool
-	}{
-		{
-			"Test Category Query OK",
-			fields{client},
-			args{input},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test Category Query OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetCategoryQuery(context.Background(), testCase.args.query)
-			testOperationResult(t, "GetCategoryQuery", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetCategoryQuery(context.Background(), query)
+		testOperationResult(t, "GetCategoryQuery", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateNetworkSecurityRule(t *testing.T) {
@@ -1376,60 +1067,36 @@ func TestOperations_CreateNetworkSecurityRule(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *NetworkSecurityRuleIntentInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *NetworkSecurityRuleIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateNetwork",
-			fields{
-				client,
-			},
-			args{
-				&NetworkSecurityRuleIntentInput{
-					APIVersion: new("3.1"),
-					Metadata: &Metadata{
-						Kind: new("network_security_rule"),
-					},
-					Spec: &NetworkSecurityRule{
-						Name:        new("network.create"),
-						Description: new("Network Create"),
-						Resources:   nil,
-					},
-				},
-			},
-			&NetworkSecurityRuleIntentResponse{
-				APIVersion: new("3.1"),
-				Metadata: &Metadata{
-					Kind: new("network_security_rule"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+	request := &NetworkSecurityRuleIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("network_security_rule"),
+		},
+		Spec: &NetworkSecurityRule{
+			Name:        new("network.create"),
+			Description: new("Network Create"),
+			Resources:   nil,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateNetworkSecurityRule(context.Background(), testCase.args.request)
-			testOperationResult(t, "CreateNetworkSecurityRule", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &NetworkSecurityRuleIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("network_security_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateNetwork", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateNetworkSecurityRule(context.Background(), request)
+		testOperationResult(t, "CreateNetworkSecurityRule", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteNetworkSecurityRule(t *testing.T) {
@@ -1518,40 +1185,20 @@ func TestOperations_GetNetworkSecurityRule(t *testing.T) {
 		Kind: new("network_security_rule"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *NetworkSecurityRuleIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test GetNetworkSecurityRule OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetNetworkSecurityRule OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetNetworkSecurityRule(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetNetworkSecurityRule", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetNetworkSecurityRule(context.Background(), uuid)
+		testOperationResult(t, "GetNetworkSecurityRule", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListNetworkSecurityRule(t *testing.T) {
@@ -1577,40 +1224,20 @@ func TestOperations_ListNetworkSecurityRule(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *NetworkSecurityRuleListIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test ListNetwork OK",
-			fields{client},
-			args{input},
-			list,
-			false,
-		},
-	}
+	expected := list
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test ListNetwork OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.ListNetworkSecurityRule(context.Background(), testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListNetworkSecurityRule", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListNetworkSecurityRule(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListNetworkSecurityRule", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateNetworkSecurityRule(t *testing.T) {
@@ -1653,62 +1280,38 @@ func TestOperations_UpdateNetworkSecurityRule(t *testing.T) {
 		}`)
 		})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *NetworkSecurityRuleIntentInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *NetworkSecurityRuleIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test UpdateNetwork",
-			fields{
-				client,
-			},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&NetworkSecurityRuleIntentInput{
-					APIVersion: new("3.1"),
-					Metadata: &Metadata{
-						Kind: new("network_security_rule"),
-					},
-					Spec: &NetworkSecurityRule{
-						Resources:   nil,
-						Description: new("Network Update"),
-						Name:        new("network.update"),
-					},
-				},
-			},
-			&NetworkSecurityRuleIntentResponse{
-				APIVersion: new("3.1"),
-				Metadata: &Metadata{
-					Kind: new("network_security_rule"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+	body := &NetworkSecurityRuleIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("network_security_rule"),
+		},
+		Spec: &NetworkSecurityRule{
+			Resources:   nil,
+			Description: new("Network Update"),
+			Name:        new("network.update"),
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.UpdateNetworkSecurityRule(context.Background(), testCase.args.UUID, testCase.args.body)
-			testOperationResult(t, "UpdateNetworkSecurityRule", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &NetworkSecurityRuleIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("network_security_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test UpdateNetwork", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateNetworkSecurityRule(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateNetworkSecurityRule", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateVolumeGroup(t *testing.T) {
@@ -1752,59 +1355,37 @@ func TestOperations_CreateVolumeGroup(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *VolumeGroupInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *VolumeGroupResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateVolumeGroup",
-			fields{client},
-			args{
-				&VolumeGroupInput{
-					APIVersion: new("3.1"),
-					Metadata: &Metadata{
-						Kind: new("volume_group"),
-					},
-					Spec: &VolumeGroup{
-						Name: new("volume.create"),
-						Resources: &VolumeGroupResources{
-							FlashMode: new("ON"),
-						},
-					},
-				},
+	request := &VolumeGroupInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("volume_group"),
+		},
+		Spec: &VolumeGroup{
+			Name: new("volume.create"),
+			Resources: &VolumeGroupResources{
+				FlashMode: new("ON"),
 			},
-			&VolumeGroupResponse{
-				APIVersion: new("3.1"),
-				Metadata: &Metadata{
-					Kind: new("volume_group"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateVolumeGroup(context.Background(), testCase.args.request)
-			testOperationResult(t, "CreateVolumeGroup", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &VolumeGroupResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("volume_group"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateVolumeGroup", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateVolumeGroup(context.Background(), request)
+		testOperationResult(t, "CreateVolumeGroup", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteVolumeGroup(t *testing.T) {
@@ -1874,40 +1455,20 @@ func TestOperations_GetVolumeGroup(t *testing.T) {
 		Kind: new("volume_group"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *VolumeGroupResponse
-		wantErr bool
-	}{
-		{
-			"Test GetVolumeGroup OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetVolumeGroup OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetVolumeGroup(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetVolumeGroup", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetVolumeGroup(context.Background(), uuid)
+		testOperationResult(t, "GetVolumeGroup", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListVolumeGroup(t *testing.T) {
@@ -1933,40 +1494,20 @@ func TestOperations_ListVolumeGroup(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *VolumeGroupListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListVolumeGroup OK",
-			fields{client},
-			args{input},
-			list,
-			false,
-		},
-	}
+	expected := list
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test ListVolumeGroup OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.ListVolumeGroup(context.Background(), testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListVolumeGroup", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListVolumeGroup(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListVolumeGroup", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateVolumeGroup(t *testing.T) {
@@ -2010,61 +1551,39 @@ func TestOperations_UpdateVolumeGroup(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *VolumeGroupInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *VolumeGroupResponse
-		wantErr bool
-	}{
-		{
-			"Test UpdateVolumeGroup",
-			fields{client},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&VolumeGroupInput{
-					APIVersion: new("3.1"),
-					Metadata: &Metadata{
-						Kind: new("volume_group"),
-					},
-					Spec: &VolumeGroup{
-						Resources: &VolumeGroupResources{
-							FlashMode: new("ON"),
-						},
-						Name: new("volume.update"),
-					},
-				},
+	body := &VolumeGroupInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("volume_group"),
+		},
+		Spec: &VolumeGroup{
+			Resources: &VolumeGroupResources{
+				FlashMode: new("ON"),
 			},
-			&VolumeGroupResponse{
-				APIVersion: new("3.1"),
-				Metadata: &Metadata{
-					Kind: new("volume_group"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+			Name: new("volume.update"),
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.UpdateVolumeGroup(context.Background(), testCase.args.UUID, testCase.args.body)
-			testOperationResult(t, "UpdateVolumeGroup", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &VolumeGroupResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("volume_group"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test UpdateVolumeGroup", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateVolumeGroup(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateVolumeGroup", got, expected, err, false)
+	})
 }
 
 func testHTTPMethod(t *testing.T, r *http.Request, expected string) {
@@ -2090,40 +1609,20 @@ func TestOperations_GetHost(t *testing.T) {
 		Kind: new("host"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *HostResponse
-		wantErr bool
-	}{
-		{
-			"Test GetHost OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			hostResponse,
-			false,
-		},
-	}
+	expected := hostResponse
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetHost OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetHost(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetHost", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetHost(context.Background(), uuid)
+		testOperationResult(t, "GetHost", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListHost(t *testing.T) {
@@ -2149,40 +1648,20 @@ func TestOperations_ListHost(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *HostListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListSubnet OK",
-			fields{client},
-			args{input},
-			hostList,
-			false,
-		},
-	}
+	expected := hostList
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test ListSubnet OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.ListHost(context.Background(), testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListHost", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListHost(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListHost", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateProject(t *testing.T) {
@@ -2236,69 +1715,47 @@ func TestOperations_CreateProject(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *Project
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Project
-		wantErr bool
-	}{
-		{
-			"Test CreateProject",
-			fields{client},
-			args{
-				&Project{
-					APIVersion: "3.1",
-					Metadata: &Metadata{
-						Name: new("project_test_name"),
-						Kind: new("project"),
-						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &ProjectSpec{
-						Name:       "project_name",
-						Descripion: "description_test",
-						Resources: &ProjectResources{
-							ResourceDomain: &ResourceDomain{
-								Resources: []*Resources{
-									{
-										Limit:        new(int64(4)),
-										ResourceType: "resource_type_test",
-									},
-								},
-							},
+	request := &Project{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Name: new("project_test_name"),
+			Kind: new("project"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &ProjectSpec{
+			Name:       "project_name",
+			Descripion: "description_test",
+			Resources: &ProjectResources{
+				ResourceDomain: &ResourceDomain{
+					Resources: []*Resources{
+						{
+							Limit:        new(int64(4)),
+							ResourceType: "resource_type_test",
 						},
 					},
 				},
 			},
-			&Project{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: new("project"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateProject(context.Background(), testCase.args.request)
-			testOperationResult(t, "CreateProject", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &Project{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("project"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateProject", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateProject(context.Background(), request)
+		testOperationResult(t, "CreateProject", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetProject(t *testing.T) {
@@ -2318,40 +1775,20 @@ func TestOperations_GetProject(t *testing.T) {
 		Kind: new("host"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Project
-		wantErr bool
-	}{
-		{
-			"Test GetProject OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			hostResponse,
-			false,
-		},
-	}
+	expected := hostResponse
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetProject OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetProject(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetProject", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetProject(context.Background(), uuid)
+		testOperationResult(t, "GetProject", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListProject(t *testing.T) {
@@ -2377,40 +1814,20 @@ func TestOperations_ListProject(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ProjectListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListSubnet OK",
-			fields{client},
-			args{input},
-			hostList,
-			false,
-		},
-	}
+	expected := hostList
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test ListSubnet OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.ListProject(context.Background(), testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListProject", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListProject(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListProject", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateProject(t *testing.T) {
@@ -2463,70 +1880,48 @@ func TestOperations_UpdateProject(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *Project
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Project
-		wantErr bool
-	}{
-		{
-			"Test CreateProject",
-			fields{client},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&Project{
-					Metadata: &Metadata{
-						Name: new("project_test_name"),
-						Kind: new("project"),
-						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &ProjectSpec{
-						Name:       "project_name",
-						Descripion: "description_test",
-						Resources: &ProjectResources{
-							ResourceDomain: &ResourceDomain{
-								Resources: []*Resources{
-									{
-										Limit:        new(int64(4)),
-										ResourceType: "resource_type_test",
-									},
-								},
-							},
+	body := &Project{
+		Metadata: &Metadata{
+			Name: new("project_test_name"),
+			Kind: new("project"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &ProjectSpec{
+			Name:       "project_name",
+			Descripion: "description_test",
+			Resources: &ProjectResources{
+				ResourceDomain: &ResourceDomain{
+					Resources: []*Resources{
+						{
+							Limit:        new(int64(4)),
+							ResourceType: "resource_type_test",
 						},
 					},
 				},
 			},
-			&Project{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: new("project"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.UpdateProject(context.Background(), testCase.args.UUID, testCase.args.body)
-			testOperationResult(t, "UpdateProject", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &Project{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("project"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateProject", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateProject(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateProject", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteProject(t *testing.T) {
@@ -2644,66 +2039,44 @@ func TestOperations_CreateAccessControlPolicy(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *AccessControlPolicy
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *AccessControlPolicy
-		wantErr bool
-	}{
-		{
-			"Test CreateAccessControlPolicy",
-			fields{client},
-			args{
-				&AccessControlPolicy{
-					APIVersion: "3.1",
-					Metadata: &Metadata{
-						Name: new("access_control_policy_test_name"),
-						Kind: new("access_control_policy"),
-						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &AccessControlPolicySpec{
-						Name:        new("access_control_policy_name"),
-						Description: new("description_test"),
-						Resources: &AccessControlPolicyResources{
-							RoleReference: &Reference{
-								Kind: new("role"),
-								UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-								Name: new("access_control_policy_test_name"),
-							},
-						},
-					},
-				},
-			},
-			&AccessControlPolicy{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: new("access_control_policy"),
+	request := &AccessControlPolicy{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Name: new("access_control_policy_test_name"),
+			Kind: new("access_control_policy"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &AccessControlPolicySpec{
+			Name:        new("access_control_policy_name"),
+			Description: new("description_test"),
+			Resources: &AccessControlPolicyResources{
+				RoleReference: &Reference{
+					Kind: new("role"),
 					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+					Name: new("access_control_policy_test_name"),
 				},
 			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateAccessControlPolicy(context.Background(), testCase.args.request)
-			testOperationResult(t, "CreateAccessControlPolicy", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &AccessControlPolicy{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("access_control_policy"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateAccessControlPolicy", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateAccessControlPolicy(context.Background(), request)
+		testOperationResult(t, "CreateAccessControlPolicy", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetAccessControlPolicy(t *testing.T) {
@@ -2723,40 +2096,20 @@ func TestOperations_GetAccessControlPolicy(t *testing.T) {
 		Kind: new("host"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *AccessControlPolicy
-		wantErr bool
-	}{
-		{
-			"Test GetAccessControlPolicy OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			hostResponse,
-			false,
-		},
-	}
+	expected := hostResponse
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetAccessControlPolicy OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetAccessControlPolicy(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetAccessControlPolicy", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetAccessControlPolicy(context.Background(), uuid)
+		testOperationResult(t, "GetAccessControlPolicy", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListAccessControlPolicy(t *testing.T) {
@@ -2782,40 +2135,20 @@ func TestOperations_ListAccessControlPolicy(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *AccessControlPolicyListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListSubnet OK",
-			fields{client},
-			args{input},
-			hostList,
-			false,
-		},
-	}
+	expected := hostList
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test ListSubnet OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.ListAccessControlPolicy(context.Background(), testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListAccessControlPolicy", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListAccessControlPolicy(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListAccessControlPolicy", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateAccessControlPolicy(t *testing.T) {
@@ -2865,67 +2198,45 @@ func TestOperations_UpdateAccessControlPolicy(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *AccessControlPolicy
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *AccessControlPolicy
-		wantErr bool
-	}{
-		{
-			"Test CreateAccessControlPolicy",
-			fields{client},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&AccessControlPolicy{
-					Metadata: &Metadata{
-						Name: new("access_control_policy_test_name"),
-						Kind: new("access_control_policy"),
-						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &AccessControlPolicySpec{
-						Name:        new("access_control_policy_name"),
-						Description: new("description_test"),
-						Resources: &AccessControlPolicyResources{
-							RoleReference: &Reference{
-								Kind: new("role"),
-								UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-								Name: new("access_control_policy_test_name_2"),
-							},
-						},
-					},
-				},
-			},
-			&AccessControlPolicy{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: new("access_control_policy"),
+	body := &AccessControlPolicy{
+		Metadata: &Metadata{
+			Name: new("access_control_policy_test_name"),
+			Kind: new("access_control_policy"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &AccessControlPolicySpec{
+			Name:        new("access_control_policy_name"),
+			Description: new("description_test"),
+			Resources: &AccessControlPolicyResources{
+				RoleReference: &Reference{
+					Kind: new("role"),
 					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+					Name: new("access_control_policy_test_name_2"),
 				},
 			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.UpdateAccessControlPolicy(context.Background(), testCase.args.UUID, testCase.args.body)
-			testOperationResult(t, "UpdateAccessControlPolicy", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &AccessControlPolicy{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("access_control_policy"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateAccessControlPolicy", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateAccessControlPolicy(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateAccessControlPolicy", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteAccessControlPolicy(t *testing.T) {
@@ -3045,68 +2356,46 @@ func TestOperations_CreateRole(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *Role
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Role
-		wantErr bool
-	}{
-		{
-			"Test CreateRole",
-			fields{client},
-			args{
-				&Role{
-					APIVersion: "3.1",
-					Metadata: &Metadata{
-						Name: new("role_test_name"),
+	request := &Role{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Name: new("role_test_name"),
+			Kind: new("role"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &RoleSpec{
+			Name:        new("role_name"),
+			Description: new("description_test"),
+			Resources: &RoleResources{
+				PermissionReferenceList: []*Reference{
+					{
 						Kind: new("role"),
 						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &RoleSpec{
-						Name:        new("role_name"),
-						Description: new("description_test"),
-						Resources: &RoleResources{
-							PermissionReferenceList: []*Reference{
-								{
-									Kind: new("role"),
-									UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-									Name: new("role_test_name"),
-								},
-							},
-						},
+						Name: new("role_test_name"),
 					},
 				},
 			},
-			&Role{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: new("role"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateRole(context.Background(), testCase.args.request)
-			testOperationResult(t, "CreateRole", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &Role{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("role"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateRole", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateRole(context.Background(), request)
+		testOperationResult(t, "CreateRole", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetRole(t *testing.T) {
@@ -3126,40 +2415,20 @@ func TestOperations_GetRole(t *testing.T) {
 		Kind: new("host"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Role
-		wantErr bool
-	}{
-		{
-			"Test GetRole OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			hostResponse,
-			false,
-		},
-	}
+	expected := hostResponse
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetRole OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetRole(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetRole", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetRole(context.Background(), uuid)
+		testOperationResult(t, "GetRole", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListRole(t *testing.T) {
@@ -3185,40 +2454,20 @@ func TestOperations_ListRole(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *RoleListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListSubnet OK",
-			fields{client},
-			args{input},
-			hostList,
-			false,
-		},
-	}
+	expected := hostList
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test ListSubnet OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.ListRole(context.Background(), testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListRole", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListRole(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListRole", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateRole(t *testing.T) {
@@ -3270,69 +2519,47 @@ func TestOperations_UpdateRole(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *Role
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Role
-		wantErr bool
-	}{
-		{
-			"Test CreateRole",
-			fields{client},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&Role{
-					Metadata: &Metadata{
-						Name: new("role_test_name"),
+	body := &Role{
+		Metadata: &Metadata{
+			Name: new("role_test_name"),
+			Kind: new("role"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &RoleSpec{
+			Name:        new("role_name"),
+			Description: new("description_test"),
+			Resources: &RoleResources{
+				PermissionReferenceList: []*Reference{
+					{
 						Kind: new("role"),
 						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &RoleSpec{
-						Name:        new("role_name"),
-						Description: new("description_test"),
-						Resources: &RoleResources{
-							PermissionReferenceList: []*Reference{
-								{
-									Kind: new("role"),
-									UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-									Name: new("role_test_name"),
-								},
-							},
-						},
+						Name: new("role_test_name"),
 					},
 				},
 			},
-			&Role{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: new("role"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.UpdateRole(context.Background(), testCase.args.UUID, testCase.args.body)
-			testOperationResult(t, "UpdateRole", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &Role{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("role"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateRole", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateRole(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateRole", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteRole(t *testing.T) {
@@ -3450,66 +2677,44 @@ func TestOperations_CreateUser(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *UserIntentInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *UserIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateUser",
-			fields{client},
-			args{
-				&UserIntentInput{
-					APIVersion: new("3.1"),
-					Metadata: &Metadata{
-						Name: new("user_name"),
-						Kind: new("user"),
-						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+	request := &UserIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Name: new("user_name"),
+			Kind: new("user"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &UserSpec{
+			Resources: &UserResources{
+				DirectoryServiceUser: &DirectoryServiceUser{
+					DirectoryServiceReference: &Reference{
+						Kind: new("directory_service"),
+						UUID: new("d8b53470-c432-4556-badd-a11c937d89c9"),
 					},
-					Spec: &UserSpec{
-						Resources: &UserResources{
-							DirectoryServiceUser: &DirectoryServiceUser{
-								DirectoryServiceReference: &Reference{
-									Kind: new("directory_service"),
-									UUID: new("d8b53470-c432-4556-badd-a11c937d89c9"),
-								},
-								UserPrincipalName: new("user-dummy-tbd@ntnx.local"),
-							},
-						},
-					},
+					UserPrincipalName: new("user-dummy-tbd@ntnx.local"),
 				},
 			},
-			&UserIntentResponse{
-				APIVersion: new("3.1"),
-				Metadata: &Metadata{
-					Kind: new("user"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateUser(context.Background(), testCase.args.request)
-			testOperationResult(t, "CreateUser", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &UserIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("user"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateUser", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateUser(context.Background(), request)
+		testOperationResult(t, "CreateUser", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetUser(t *testing.T) {
@@ -3529,40 +2734,20 @@ func TestOperations_GetUser(t *testing.T) {
 		Kind: new("user"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *UserIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test GetUser OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			hostResponse,
-			false,
-		},
-	}
+	expected := hostResponse
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetUser OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetUser(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetUser", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetUser(context.Background(), uuid)
+		testOperationResult(t, "GetUser", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListUser(t *testing.T) {
@@ -3588,40 +2773,20 @@ func TestOperations_ListUser(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *UserListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListUser OK",
-			fields{client},
-			args{input},
-			hostList,
-			false,
-		},
-	}
+	expected := hostList
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test ListUser OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.ListUser(context.Background(), testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListUser", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListUser(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListUser", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateUser(t *testing.T) {
@@ -3672,68 +2837,46 @@ func TestOperations_UpdateUser(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *UserIntentInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *UserIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateUser",
-			fields{client},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&UserIntentInput{
-					APIVersion: new("3.1"),
-					Metadata: &Metadata{
-						Name: new("user_name"),
-						Kind: new("user"),
-						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+	body := &UserIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Name: new("user_name"),
+			Kind: new("user"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &UserSpec{
+			Resources: &UserResources{
+				DirectoryServiceUser: &DirectoryServiceUser{
+					DirectoryServiceReference: &Reference{
+						Kind: new("directory_service"),
+						UUID: new("d8b53470-c432-4556-badd-a11c937d89c9"),
 					},
-					Spec: &UserSpec{
-						Resources: &UserResources{
-							DirectoryServiceUser: &DirectoryServiceUser{
-								DirectoryServiceReference: &Reference{
-									Kind: new("directory_service"),
-									UUID: new("d8b53470-c432-4556-badd-a11c937d89c9"),
-								},
-								UserPrincipalName: new("user-dummy-tbd@ntnx.local"),
-							},
-						},
-					},
+					UserPrincipalName: new("user-dummy-tbd@ntnx.local"),
 				},
 			},
-			&UserIntentResponse{
-				APIVersion: new("3.1"),
-				Metadata: &Metadata{
-					Kind: new("user"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.UpdateUser(context.Background(), testCase.args.UUID, testCase.args.body)
-			testOperationResult(t, "UpdateUser", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &UserIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("user"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateUser", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateUser(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateUser", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteUser(t *testing.T) {
@@ -3871,8 +3014,8 @@ func TestOperations_CreateProtectionRule(t *testing.T) {
 			t.Fatalf("decode json: %v", err)
 		}
 
-		assert := assert.New(t)
-		if !assert.Equal(actual, expected, "The response should be the same") {
+		assertions := assert.New(t)
+		if !assertions.Equal(actual, expected, "The response should be the same") {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
@@ -3885,99 +3028,77 @@ func TestOperations_CreateProtectionRule(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *ProtectionRuleInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ProtectionRuleResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateProtectionRule",
-			fields{client},
-			args{
-				&ProtectionRuleInput{
-					APIVersion: "3.1",
-					Metadata: &Metadata{
-						Name: new("protection_rule_test_name"),
-						Kind: new("protection_rule"),
-						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+	request := &ProtectionRuleInput{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Name: new("protection_rule_test_name"),
+			Kind: new("protection_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &ProtectionRuleSpec{
+			Name:        "protection_rule_name",
+			Description: "description_test",
+			Resources: &ProtectionRuleResources{
+				StartTime: "00h:00m",
+				OrderedAvailabilityZoneList: []*OrderedAvailabilityZoneList{
+					{
+						AvailabilityZoneURL: "url test",
+						ClusterUUID:         "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 					},
-					Spec: &ProtectionRuleSpec{
-						Name:        "protection_rule_name",
-						Description: "description_test",
-						Resources: &ProtectionRuleResources{
-							StartTime: "00h:00m",
-							OrderedAvailabilityZoneList: []*OrderedAvailabilityZoneList{
-								{
-									AvailabilityZoneURL: "url test",
-									ClusterUUID:         "cfde831a-4e87-4a75-960f-89b0148aa2cc",
-								},
-							},
-							AvailabilityZoneConnectivityList: []*AvailabilityZoneConnectivityList{
-								{
-									DestinationAvailabilityZoneIndex: new(int64(0)),
-									SourceAvailabilityZoneIndex:      new(int64(0)),
-									SnapshotScheduleList: []*SnapshotScheduleList{
-										{
-											RecoveryPointObjectiveSecs: new(int64(0)),
-											AutoSuspendTimeoutSecs:     new(int64(0)),
-											SnapshotType:               "CRASH_CONSISTENT",
-											LocalSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
-												NumSnapshots: new(int64(1)),
-												RollupRetentionPolicy: &RollupRetentionPolicy{
-													SnapshotIntervalType: "HOURLY",
-													Multiple:             new(int64(1)),
-												},
-											},
-											RemoteSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
-												NumSnapshots: new(int64(1)),
-												RollupRetentionPolicy: &RollupRetentionPolicy{
-													SnapshotIntervalType: "HOURLY",
-													Multiple:             new(int64(1)),
-												},
-											},
-										},
+				},
+				AvailabilityZoneConnectivityList: []*AvailabilityZoneConnectivityList{
+					{
+						DestinationAvailabilityZoneIndex: new(int64(0)),
+						SourceAvailabilityZoneIndex:      new(int64(0)),
+						SnapshotScheduleList: []*SnapshotScheduleList{
+							{
+								RecoveryPointObjectiveSecs: new(int64(0)),
+								AutoSuspendTimeoutSecs:     new(int64(0)),
+								SnapshotType:               "CRASH_CONSISTENT",
+								LocalSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
+									NumSnapshots: new(int64(1)),
+									RollupRetentionPolicy: &RollupRetentionPolicy{
+										SnapshotIntervalType: "HOURLY",
+										Multiple:             new(int64(1)),
 									},
 								},
-							},
-							CategoryFilter: &CategoryFilter{
-								Type:     new("CATEGORIES_MATCH_ALL"),
-								KindList: []*string{new("1"), new("2")},
+								RemoteSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
+									NumSnapshots: new(int64(1)),
+									RollupRetentionPolicy: &RollupRetentionPolicy{
+										SnapshotIntervalType: "HOURLY",
+										Multiple:             new(int64(1)),
+									},
+								},
 							},
 						},
 					},
 				},
-			},
-			&ProtectionRuleResponse{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: new("protection_rule"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+				CategoryFilter: &CategoryFilter{
+					Type:     new("CATEGORIES_MATCH_ALL"),
+					KindList: []*string{new("1"), new("2")},
 				},
 			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.CreateProtectionRule(context.Background(), testCase.args.request)
-			testOperationResult(t, "CreateProtectionRule", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &ProtectionRuleResponse{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("protection_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateProtectionRule", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateProtectionRule(context.Background(), request)
+		testOperationResult(t, "CreateProtectionRule", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetProtectionRule(t *testing.T) {
@@ -3997,40 +3118,20 @@ func TestOperations_GetProtectionRule(t *testing.T) {
 		Kind: new("protection_rule"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ProtectionRuleResponse
-		wantErr bool
-	}{
-		{
-			"Test GetProtectionRules OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetProtectionRules OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetProtectionRule(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetProtectionRules", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetProtectionRule(context.Background(), uuid)
+		testOperationResult(t, "GetProtectionRules", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListProtectionRules(t *testing.T) {
@@ -4056,40 +3157,20 @@ func TestOperations_ListProtectionRules(t *testing.T) {
 		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ProtectionRulesListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListProtectionRules OK",
-			fields{client},
-			args{input},
-			responseList,
-			false,
-		},
-	}
+	expected := responseList
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test ListProtectionRules OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.ListProtectionRules(context.Background(), testCase.args.getEntitiesRequest)
-			testOperationResult(t, "ListProtectionRules", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListProtectionRules(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListProtectionRules", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateProtectionRules(t *testing.T) {
@@ -4160,8 +3241,8 @@ func TestOperations_UpdateProtectionRules(t *testing.T) {
 			t.Fatalf("decode json: %v", err)
 		}
 
-		assert := assert.New(t)
-		if !assert.Equal(actual, expected, "The response should be the same") {
+		assertions := assert.New(t)
+		if !assertions.Equal(actual, expected, "The response should be the same") {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
@@ -4174,101 +3255,79 @@ func TestOperations_UpdateProtectionRules(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *ProtectionRuleInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ProtectionRuleResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateProtectionRule",
-			fields{client},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&ProtectionRuleInput{
-					APIVersion: "3.1",
-					Metadata: &Metadata{
-						Name: new("protection_rule_test_name"),
-						Kind: new("protection_rule"),
-						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+	body := &ProtectionRuleInput{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Name: new("protection_rule_test_name"),
+			Kind: new("protection_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &ProtectionRuleSpec{
+			Name:        "protection_rule_name",
+			Description: "description_test",
+			Resources: &ProtectionRuleResources{
+				StartTime: "00h:00m",
+				OrderedAvailabilityZoneList: []*OrderedAvailabilityZoneList{
+					{
+						AvailabilityZoneURL: "url test",
+						ClusterUUID:         "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 					},
-					Spec: &ProtectionRuleSpec{
-						Name:        "protection_rule_name",
-						Description: "description_test",
-						Resources: &ProtectionRuleResources{
-							StartTime: "00h:00m",
-							OrderedAvailabilityZoneList: []*OrderedAvailabilityZoneList{
-								{
-									AvailabilityZoneURL: "url test",
-									ClusterUUID:         "cfde831a-4e87-4a75-960f-89b0148aa2cc",
-								},
-							},
-							AvailabilityZoneConnectivityList: []*AvailabilityZoneConnectivityList{
-								{
-									DestinationAvailabilityZoneIndex: new(int64(0)),
-									SourceAvailabilityZoneIndex:      new(int64(0)),
-									SnapshotScheduleList: []*SnapshotScheduleList{
-										{
-											RecoveryPointObjectiveSecs: new(int64(0)),
-											AutoSuspendTimeoutSecs:     new(int64(0)),
-											SnapshotType:               "CRASH_CONSISTENT",
-											LocalSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
-												NumSnapshots: new(int64(1)),
-												RollupRetentionPolicy: &RollupRetentionPolicy{
-													SnapshotIntervalType: "HOURLY",
-													Multiple:             new(int64(1)),
-												},
-											},
-											RemoteSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
-												NumSnapshots: new(int64(1)),
-												RollupRetentionPolicy: &RollupRetentionPolicy{
-													SnapshotIntervalType: "HOURLY",
-													Multiple:             new(int64(1)),
-												},
-											},
-										},
+				},
+				AvailabilityZoneConnectivityList: []*AvailabilityZoneConnectivityList{
+					{
+						DestinationAvailabilityZoneIndex: new(int64(0)),
+						SourceAvailabilityZoneIndex:      new(int64(0)),
+						SnapshotScheduleList: []*SnapshotScheduleList{
+							{
+								RecoveryPointObjectiveSecs: new(int64(0)),
+								AutoSuspendTimeoutSecs:     new(int64(0)),
+								SnapshotType:               "CRASH_CONSISTENT",
+								LocalSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
+									NumSnapshots: new(int64(1)),
+									RollupRetentionPolicy: &RollupRetentionPolicy{
+										SnapshotIntervalType: "HOURLY",
+										Multiple:             new(int64(1)),
 									},
 								},
-							},
-							CategoryFilter: &CategoryFilter{
-								Type:     new("CATEGORIES_MATCH_ALL"),
-								KindList: []*string{new("1"), new("2")},
+								RemoteSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
+									NumSnapshots: new(int64(1)),
+									RollupRetentionPolicy: &RollupRetentionPolicy{
+										SnapshotIntervalType: "HOURLY",
+										Multiple:             new(int64(1)),
+									},
+								},
 							},
 						},
 					},
 				},
-			},
-			&ProtectionRuleResponse{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: new("protection_rule"),
-					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+				CategoryFilter: &CategoryFilter{
+					Type:     new("CATEGORIES_MATCH_ALL"),
+					KindList: []*string{new("1"), new("2")},
 				},
 			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.UpdateProtectionRule(context.Background(), testCase.args.UUID, testCase.args.body)
-			testOperationResult(t, "UpdateProtectionRules", got, testCase.want, err, testCase.wantErr)
-		})
+	expected := &ProtectionRuleResponse{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("protection_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateProtectionRule", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateProtectionRule(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateProtectionRules", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteProtectionRules(t *testing.T) {
@@ -4596,40 +3655,20 @@ func TestOperations_GetRecoveryPlanJob(t *testing.T) {
 		Kind: new("recovery_plan_jobs"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *RecoveryPlanJobIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test GetRecoveryPlanJob OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetRecoveryPlanJob OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetRecoveryPlanJob(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetRecoveryPlanJob", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetRecoveryPlanJob(context.Background(), uuid)
+		testOperationResult(t, "GetRecoveryPlanJob", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetRecoveryPlanJobStatus(t *testing.T) {
@@ -4650,14 +3689,14 @@ func TestOperations_GetRecoveryPlanJobStatus(t *testing.T) {
 		_, _ = fmt.Fprint(w, `{"operation_status": {"percentage_complete":55,"status":"Running"},"preprocessing_status": {"percentage_complete":100,"status":"Complete"}}`)
 	})
 
-	execution_status_response := &RecoveryPlanJobExecutionStatus{
+	executionStatusResponse := &RecoveryPlanJobExecutionStatus{
 		OperationStatus: &RecoveryPlanJobPhaseExecutionStatus{
 			PercentageComplete: 55,
 			Status:             "Running",
 		},
 	}
 
-	cleanup_status_response := &RecoveryPlanJobExecutionStatus{
+	cleanupStatusResponse := &RecoveryPlanJobExecutionStatus{
 		OperationStatus: &RecoveryPlanJobPhaseExecutionStatus{
 			PercentageComplete: 55,
 			Status:             "Running",
@@ -4688,14 +3727,14 @@ func TestOperations_GetRecoveryPlanJobStatus(t *testing.T) {
 			"Test GetRecoveryPlanJobStatus ExecutionStatus OK",
 			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc", "execution_status"},
-			execution_status_response,
+			executionStatusResponse,
 			false,
 		},
 		{
 			"Test GetRecoveryPlanJobStatus CleanupStatus OK",
 			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc", "cleanup_status"},
-			cleanup_status_response,
+			cleanupStatusResponse,
 			false,
 		},
 	}
@@ -4873,44 +3912,22 @@ func TestOperations_ListRecoveryPlanJobs(t *testing.T) {
 		Kind: new("recovery_plan_jobs"),
 	}
 
-	type fields struct {
-		client *internal.Client
+	operationClient := client
+
+	request := &DSMetadata{
+		Length: new(int64(1)),
 	}
 
-	type args struct {
-		request *DSMetadata
-	}
+	expected := responseList
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *RecoveryPlanJobListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListRecoveryPlanJobs OK",
-			fields{client},
-			args{
-				&DSMetadata{
-					Length: new(int64(1)),
-				},
-			},
-			responseList,
-			false,
-		},
-	}
+	t.Run("Test ListRecoveryPlanJobs OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-
-			got, err := op.ListRecoveryPlanJobs(context.Background(), testCase.args.request)
-			testOperationResult(t, "ListRecoveryPlanJobs", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.ListRecoveryPlanJobs(context.Background(), request)
+		testOperationResult(t, "ListRecoveryPlanJobs", got, expected, err, false)
+	})
 }
 
 func TestOperations_GroupsGetEntities(t *testing.T) {
@@ -4924,53 +3941,34 @@ func TestOperations_GroupsGetEntities(t *testing.T) {
 		_, _ = fmt.Fprint(w, `{"filtered_group_count": 3, "group_results": [{"entity_results": [{"entity_id":"some_entity_id", "data":[{"values":[{"time":100, "values":["a", "b", "c"]}]}]}]}]}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *GroupsGetEntitiesRequest
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *GroupsGetEntitiesResponse
-		wantErr bool
-	}{
-		{
-			"Test GroupsGetEntities OK",
-			fields{client},
-			args{
-				&GroupsGetEntitiesRequest{
-					EntityType: new("volume_group_config"),
-					GroupMemberAttributes: []*GroupsRequestedAttribute{
-						{
-							Attribute: new("synchronous_replication_status"),
-						},
-						{
-							Attribute: new("_master_cluster_uuid_"),
-						},
-					},
-					FilterCriteria: "uuid=in=uuid1|uuid2",
-				},
+	request := &GroupsGetEntitiesRequest{
+		EntityType: new("volume_group_config"),
+		GroupMemberAttributes: []*GroupsRequestedAttribute{
+			{
+				Attribute: new("synchronous_replication_status"),
 			},
-			&GroupsGetEntitiesResponse{
-				FilteredGroupCount: 3,
-				GroupResults: []*GroupsGroupResult{
+			{
+				Attribute: new("_master_cluster_uuid_"),
+			},
+		},
+		FilterCriteria: "uuid=in=uuid1|uuid2",
+	}
+
+	expected := &GroupsGetEntitiesResponse{
+		FilteredGroupCount: 3,
+		GroupResults: []*GroupsGroupResult{
+			{
+				EntityResults: []*GroupsEntity{
 					{
-						EntityResults: []*GroupsEntity{
+						EntityID: "some_entity_id",
+						Data: []*GroupsFieldData{
 							{
-								EntityID: "some_entity_id",
-								Data: []*GroupsFieldData{
+								Values: []*GroupsTimevaluePair{
 									{
-										Values: []*GroupsTimevaluePair{
-											{
-												Time:   100,
-												Values: []string{"a", "b", "c"},
-											},
-										},
+										Time:   100,
+										Values: []string{"a", "b", "c"},
 									},
 								},
 							},
@@ -4978,20 +3976,17 @@ func TestOperations_GroupsGetEntities(t *testing.T) {
 					},
 				},
 			},
-			false,
 		},
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
-			got, err := op.GroupsGetEntities(context.Background(), testCase.args.request)
+	t.Run("Test GroupsGetEntities OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+		got, err := op.GroupsGetEntities(context.Background(), request)
 
-			testOperationResult(t, "GroupsGetEntities", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		testOperationResult(t, "GroupsGetEntities", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetAvailabilityZone(t *testing.T) {
@@ -5017,40 +4012,20 @@ func TestOperations_GetAvailabilityZone(t *testing.T) {
 		Resources: resources,
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *AvailabilityZoneIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test GetAvailabilityZone OK",
-			fields{client},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			op := Operations{
-				client: testCase.fields.client,
-			}
+	t.Run("Test GetAvailabilityZone OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-			got, err := op.GetAvailabilityZone(context.Background(), testCase.args.UUID)
-			testOperationResult(t, "GetAvailabilityZone", got, testCase.want, err, testCase.wantErr)
-		})
-	}
+		got, err := op.GetAvailabilityZone(context.Background(), uuid)
+		testOperationResult(t, "GetAvailabilityZone", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetPrismCentral(t *testing.T) {

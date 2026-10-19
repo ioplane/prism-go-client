@@ -8,7 +8,7 @@ import (
 	"github.com/nutanix-cloud-native/prism-go-client/v3/models"
 )
 
-// Reference ...
+// Reference holds the reference fields.
 type Reference struct {
 	Kind *string `json:"kind" mapstructure:"kind"`
 	Name *string `json:"name,omitempty" mapstructure:"name,omitempty"`
@@ -21,6 +21,7 @@ type VMVnumaConfig struct {
 	NumVnumaNodes *int64 `json:"num_vnuma_nodes,omitempty" mapstructure:"num_vnuma_nodes,omitempty"`
 }
 
+// VMSerialPort holds the vmserial port fields.
 type VMSerialPort struct {
 	Index       *int64 `json:"index,omitempty" mapstructure:"index,omitempty"`
 	IsConnected *bool  `json:"is_connected,omitempty" mapstructure:"is_connected,omitempty"`
@@ -187,7 +188,7 @@ type VMPowerStateMechanism struct {
 	Mechanism *string `json:"mechanism,omitempty" mapstructure:"mechanism,omitempty"`
 }
 
-// VMDiskDeviceProperties ...
+// VMDiskDeviceProperties holds the vmdisk device properties fields.
 type VMDiskDeviceProperties struct {
 	DeviceType  *string      `json:"device_type,omitempty" mapstructure:"device_type,omitempty"`
 	DiskAddress *DiskAddress `json:"disk_address,omitempty" mapstructure:"disk_address,omitempty"`
@@ -315,7 +316,7 @@ type VM struct {
 	Resources *VMResources `json:"resources,omitempty" mapstructure:"resources,omitempty"`
 }
 
-// VMIntentInput ...
+// VMIntentInput holds the vmintent input fields.
 type VMIntentInput struct {
 	APIVersion *string `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 
@@ -324,7 +325,7 @@ type VMIntentInput struct {
 	Spec *VM `json:"spec" mapstructure:"spec"`
 }
 
-// MessageResource ...
+// MessageResource holds the message resource fields.
 type MessageResource struct {
 	// Custom key-value details relevant to the status.
 	Details any `json:"details,omitempty" mapstructure:"details,omitempty"`
@@ -561,7 +562,7 @@ type VMDefStatus struct {
 	ExecutionContext *ExecutionContext `json:"execution_context,omitempty" mapstructure:"execution_context,omitempty"`
 }
 
-// ExecutionContext ...
+// ExecutionContext holds the execution context fields.
 type ExecutionContext struct {
 	TaskUUID any `json:"task_uuid,omitempty" mapstructure:"task_uuid,omitempty"`
 }
@@ -661,7 +662,7 @@ type SubnetListIntentResponse struct {
 	Metadata *ListMetadataOutput `json:"metadata" mapstructure:"metadata"`
 }
 
-// SubnetListMetadata ...
+// SubnetListMetadata holds the subnet list metadata fields.
 type SubnetListMetadata struct {
 	// The filter in FIQL syntax used for the results.
 	Filter *string `json:"filter,omitempty" mapstructure:"filter,omitempty"`
@@ -1088,7 +1089,7 @@ type EntityReference struct {
 	UUID *string `json:"uuid,omitempty" mapstructure:"uuid,omitempty"`
 }
 
-// CategoryQueryResponseResults ...
+// CategoryQueryResponseResults holds the category query response results fields.
 type CategoryQueryResponseResults struct {
 	// List of entity references.
 	EntityAnyReferenceList []*EntityReference `json:"entity_any_reference_list,omitempty" mapstructure:"entity_any_reference_list,omitempty"`
@@ -1147,7 +1148,7 @@ type NetworkRuleIcmpTypeCodeList struct {
 	Type *int64 `json:"type,omitempty" mapstructure:"type,omitempty"`
 }
 
-// NetworkRule ...
+// NetworkRule holds the network rule fields.
 type NetworkRule struct {
 	ExpirationTime                *string                        `json:"expiration_time,omitempty" mapstructure:"expiration_time,omitempty"`
 	Filter                        *CategoryFilter                `json:"filter,omitempty" mapstructure:"filter,omitempty"`
@@ -1163,7 +1164,7 @@ type NetworkRule struct {
 	ServiceGroupList              []*Reference                   `json:"service_group_list,omitempty" mapstructure:"service_group_list,omitempty"`
 }
 
-// TargetGroup ...
+// TargetGroup holds the target group fields.
 type TargetGroup struct {
 	// Default policy for communication within target group.
 	DefaultInternalPolicy *string `json:"default_internal_policy,omitempty" mapstructure:"default_internal_policy,omitempty"`
@@ -1192,7 +1193,7 @@ type NetworkSecurityRuleIsolationRule struct {
 	SecondEntityFilter *CategoryFilter `json:"second_entity_filter,omitempty" mapstructure:"second_entity_filter,omitempty"` // The set of categories that matching VMs need to have.
 }
 
-// NetworkSecurityRuleResources ...
+// NetworkSecurityRuleResources holds the network security rule resources fields.
 type NetworkSecurityRuleResources struct {
 	AllowIpv6Traffic      *bool                             `json:"allow_ipv6_traffic,omitempty" mapstructure:"allow_ipv6_traffic,omitempty"`
 	IsPolicyHitlogEnabled *bool                             `json:"is_policy_hitlog_enabled,omitempty" mapstructure:"is_policy_hitlog_enabled,omitempty"`
@@ -1202,7 +1203,7 @@ type NetworkSecurityRuleResources struct {
 	QuarantineRule        *NetworkSecurityRuleResourcesRule `json:"quarantine_rule,omitempty" mapstructure:"quarantine_rule,omitempty"`
 }
 
-// NetworkSecurityRule ...
+// NetworkSecurityRule holds the network security rule fields.
 type NetworkSecurityRule struct {
 	Description *string                       `json:"description" mapstructure:"description"`
 	Name        *string                       `json:"name,omitempty" mapstructure:"name,omitempty"`
@@ -1237,7 +1238,7 @@ type NetworkSecurityRuleIntentInput struct {
 	Spec       *NetworkSecurityRule `json:"spec" mapstructure:"spec"`
 }
 
-// NetworkSecurityRuleDefStatus ... Network security rule status.
+// NetworkSecurityRuleDefStatus Network security rule status.
 type NetworkSecurityRuleDefStatus struct {
 	Resources        *NetworkSecurityRuleResources `json:"resources,omitempty" mapstructure:"resources,omitempty"`
 	State            *string                       `json:"state,omitempty" mapstructure:"state,omitempty"`
@@ -1284,7 +1285,7 @@ type ListMetadataOutput struct {
 	TotalMatches  *int64  `json:"total_matches,omitempty" mapstructure:"total_matches,omitempty"`   // Total matches found
 }
 
-// NetworkSecurityRuleIntentResource ... Response object for intentful operations on a network_security_rule.
+// NetworkSecurityRuleIntentResource Response object for intentful operations on a network_security_rule.
 type NetworkSecurityRuleIntentResource struct {
 	APIVersion *string                       `json:"api_version,omitempty" mapstructure:"api_version,omitempty"`
 	Metadata   *Metadata                     `json:"metadata,omitempty" mapstructure:"metadata,omitempty"`
@@ -1362,7 +1363,7 @@ type VolumeGroupListResponse struct {
 	Metadata   *ListMetadataOutput    `json:"metadata" mapstructure:"metadata"`
 }
 
-// TasksResponse ...
+// TasksResponse holds the tasks response fields.
 type TasksResponse struct {
 	Status               *string      `json:"status,omitempty" mapstructure:"status,omitempty"`
 	LastUpdateTime       *time.Time   `json:"last_update_time,omitempty" mapstructure:"last_update_time,omitempty"`
@@ -1381,7 +1382,7 @@ type TasksResponse struct {
 	ErrorDetail          *string      `json:"error_detail,omitempty" mapstructure:"error_detail,omitempty"`
 }
 
-// DeleteResponse ...
+// DeleteResponse holds the delete response fields.
 type DeleteResponse struct {
 	Status     *DeleteStatus `json:"status" mapstructure:"status"`
 	Spec       string        `json:"spec" mapstructure:"spec"`
@@ -1389,7 +1390,7 @@ type DeleteResponse struct {
 	Metadata   *Metadata     `json:"metadata" mapstructure:"metadata"`
 }
 
-// DeleteStatus ...
+// DeleteStatus holds the delete status fields.
 type DeleteStatus struct {
 	State            string            `json:"state" mapstructure:"state"`
 	ExecutionContext *ExecutionContext `json:"execution_context" mapstructure:"execution_context"`
@@ -1549,7 +1550,7 @@ type ResourceDomain struct {
 	Resources []*Resources `json:"resources,omitempty"`
 }
 
-// ProjectResources ...
+// ProjectResources holds the project resources fields.
 type ProjectResources struct {
 	ResourceDomain                 *ResourceDomain    `json:"resource_domain,omitempty"`
 	AccountReferenceList           []*ReferenceValues `json:"account_reference_list,omitempty"`
@@ -1562,7 +1563,7 @@ type ProjectResources struct {
 	ExternalNetworkList            []*ReferenceValues `json:"external_network_list,omitempty"`
 }
 
-// ProjectStatus ...
+// ProjectStatus holds the project status fields.
 type ProjectStatus struct {
 	State            string             `json:"state,omitempty"`
 	MessageList      []*MessageResource `json:"message_list,omitempty"`
@@ -1572,7 +1573,7 @@ type ProjectStatus struct {
 	ExecutionContext *ExecutionContext  `json:"execution_context,omitempty"`
 }
 
-// ProjectSpec ...
+// ProjectSpec holds the project spec fields.
 type ProjectSpec struct {
 	Name       string            `json:"name,omitempty"`
 	Resources  *ProjectResources `json:"resources,omitempty"`
@@ -1594,7 +1595,7 @@ type ProjectListResponse struct {
 	Metadata   *ListMetadataOutput `json:"metadata,omitempty"`
 }
 
-// AccessControlPolicyResources ...
+// AccessControlPolicyResources holds the access control policy resources fields.
 type AccessControlPolicyResources struct {
 	UserReferenceList      []*Reference `json:"user_reference_list,omitempty"`
 	UserGroupReferenceList []*Reference `json:"user_group_reference_list,omitempty"`
@@ -1602,44 +1603,44 @@ type AccessControlPolicyResources struct {
 	FilterList             *FilterList  `json:"filter_list,omitempty"`
 }
 
-// FilterList ...
+// FilterList holds the filter list fields.
 type FilterList struct {
 	ContextList []*ContextList `json:"context_list,omitempty"`
 }
 
-// ContextList ...
+// ContextList holds the context list fields.
 type ContextList struct {
 	ScopeFilterExpressionList  []*ScopeFilterExpressionList `json:"scope_filter_expression_list,omitempty"`
 	EntityFilterExpressionList []EntityFilterExpressionList `json:"entity_filter_expression_list,omitempty"`
 }
 
-// ScopeFilterExpressionList ...
+// ScopeFilterExpressionList holds the scope filter expression list fields.
 type ScopeFilterExpressionList struct {
 	LeftHandSide  string        `json:"left_hand_side,omitempty"`
 	Operator      string        `json:"operator,omitempty"`
 	RightHandSide RightHandSide `json:"right_hand_side,omitempty"`
 }
 
-// EntityFilterExpressionList ...
+// EntityFilterExpressionList holds the entity filter expression list fields.
 type EntityFilterExpressionList struct {
 	LeftHandSide  LeftHandSide  `json:"left_hand_side,omitempty"`
 	Operator      string        `json:"operator,omitempty"`
 	RightHandSide RightHandSide `json:"right_hand_side,omitempty"`
 }
 
-// LeftHandSide ...
+// LeftHandSide holds the left hand side fields.
 type LeftHandSide struct {
 	EntityType *string `json:"entity_type,omitempty"`
 }
 
-// RightHandSide ...
+// RightHandSide holds the right hand side fields.
 type RightHandSide struct {
 	Collection *string             `json:"collection,omitempty"`
 	Categories map[string][]string `json:"categories,omitempty"`
 	UUIDList   []string            `json:"uuid_list,omitempty"`
 }
 
-// AccessControlPolicyStatus ...
+// AccessControlPolicyStatus holds the access control policy status fields.
 type AccessControlPolicyStatus struct {
 	State            *string                       `json:"state,omitempty"`
 	MessageList      []*MessageResource            `json:"message_list,omitempty"`
@@ -1649,7 +1650,7 @@ type AccessControlPolicyStatus struct {
 	ExecutionContext *ExecutionContext             `json:"execution_context,omitempty"`
 }
 
-// AccessControlPolicySpec ...
+// AccessControlPolicySpec holds the access control policy spec fields.
 type AccessControlPolicySpec struct {
 	Name        *string                       `json:"name,omitempty"`
 	Resources   *AccessControlPolicyResources `json:"resources,omitempty"`
@@ -1671,12 +1672,12 @@ type AccessControlPolicyListResponse struct {
 	Metadata   *ListMetadataOutput    `json:"metadata,omitempty"`
 }
 
-// RoleResources ...
+// RoleResources holds the role resources fields.
 type RoleResources struct {
 	PermissionReferenceList []*Reference `json:"permission_reference_list,omitempty"`
 }
 
-// RoleStatus ...
+// RoleStatus holds the role status fields.
 type RoleStatus struct {
 	State            *string            `json:"state,omitempty"`
 	MessageList      []*MessageResource `json:"message_list,omitempty"`
@@ -1686,7 +1687,7 @@ type RoleStatus struct {
 	ExecutionContext *ExecutionContext  `json:"execution_context,omitempty"`
 }
 
-// RoleSpec ...
+// RoleSpec holds the role spec fields.
 type RoleSpec struct {
 	Name        *string        `json:"name,omitempty"`
 	Resources   *RoleResources `json:"resources,omitempty"`
@@ -1708,14 +1709,17 @@ type RoleListResponse struct {
 	Metadata   *ListMetadataOutput `json:"metadata,omitempty"`
 }
 
+// ResourceUsageSummary holds the resource usage summary fields.
 type ResourceUsageSummary struct {
 	ResourceDomain *ResourceDomainStatus `json:"resource_domain"` // The status for a resource domain (limits and values)
 }
 
+// ResourceDomainStatus holds the resource domain status fields.
 type ResourceDomainStatus struct {
 	Resources []ResourceUtilizationStatus `json:"resources,omitempty"` // The utilization/limit for resource types
 }
 
+// ResourceUtilizationStatus holds the resource utilization status fields.
 type ResourceUtilizationStatus struct {
 	Limit        *int64  `json:"limit,omitempty"`         // The resource consumption limit (unspecified is unlimited)
 	ResourceType *string `json:"resource_type,omitempty"` // The type of resource (for example storage, CPUs)
@@ -1782,6 +1786,7 @@ type UserStatusResources struct {
 	UserType                         *string               `json:"user_type,omitempty"`
 }
 
+// UserListResponse holds the user list response fields.
 type UserListResponse struct {
 	APIVersion *string               `json:"api_version,omitempty"` // API Version of the Nutanix v3 API framework.
 	Entities   []*UserIntentResponse `json:"entities,omitempty"`
@@ -1852,6 +1857,7 @@ type PermissionResources struct {
 	Fields    *FieldsPermission `json:"fields,omitempty"`
 }
 
+// FieldsPermission holds the fields permission fields.
 type FieldsPermission struct {
 	FieldMode     *string   `json:"field_mode,omitempty"`
 	FieldNameList []*string `json:"field_name_list,omitempty"`
@@ -2023,11 +2029,13 @@ type AvailabilityZoneNetworkMappingList struct {
 	ClusterReferenceList     []*Reference        `json:"cluster_reference_list,omitempty"`
 }
 
+// IPAssignmentList holds the ipassignment list fields.
 type IPAssignmentList struct {
 	VMReference  *Reference      `json:"vm_reference,omitempty"`
 	IPConfigList []*IPConfigList `json:"ip_config_list,omitempty"`
 }
 
+// IPConfigList holds the ipconfig list fields.
 type IPConfigList struct {
 	IPAddress string `json:"ip_address,omitempty"`
 }
@@ -2072,6 +2080,7 @@ type EntityInfoList struct {
 	ScriptList         []*ScriptList     `json:"script_list,omitempty"`
 }
 
+// ScriptList holds the script list fields.
 type ScriptList struct {
 	EnableScriptExec *bool  `json:"enable_script_exec,omitempty"`
 	Timeout          *int64 `json:"timeout,omitempty"`
@@ -2115,6 +2124,7 @@ type RecoveryPlanInput struct {
 	Spec       *RecoveryPlanSpec `json:"spec,omitempty"`
 }
 
+// ServiceListEntry holds the service list entry fields.
 type ServiceListEntry struct {
 	Protocol         *string                        `json:"protocol,omitempty"`
 	TCPPortRangeList []*PortRange                   `json:"tcp_port_range_list,omitempty"`
@@ -2122,12 +2132,14 @@ type ServiceListEntry struct {
 	IcmpTypeCodeList []*NetworkRuleIcmpTypeCodeList `json:"icmp_type_code_list,omitempty"`
 }
 
+// ServiceGroupListEntry holds the service group list entry fields.
 type ServiceGroupListEntry struct {
 	UUID                   *string            `json:"uuid,omitempty"`
 	ServiceGroup           *ServiceGroupInput `json:"service_group,omitempty"`
 	AssociatedPoliciesList []*ReferenceValues `json:"associated_policies_list,omitempty"`
 }
 
+// ServiceGroupInput holds the service group input fields.
 type ServiceGroupInput struct {
 	Name          *string             `json:"name,omitempty"`
 	Description   *string             `json:"description,omitempty"`
@@ -2135,21 +2147,25 @@ type ServiceGroupInput struct {
 	SystemDefined *bool               `json:"is_system_defined,omitempty"`
 }
 
+// ServiceGroupListResponse holds the service group list response fields.
 type ServiceGroupListResponse struct {
 	Metadata *ListMetadataOutput      `json:"metadata,omitempty"`
 	Entities []*ServiceGroupListEntry `json:"entities,omitempty"`
 }
 
+// ServiceGroupResponse holds the service group response fields.
 type ServiceGroupResponse struct {
 	ServiceGroup *ServiceGroupInput `json:"service_group,omitempty"`
 	UUID         *string            `json:"uuid,omitempty"`
 }
 
+// IPAddressBlock holds the ipaddress block fields.
 type IPAddressBlock struct {
 	IPAddress    *string `json:"ip,omitempty"`
 	PrefixLength *int64  `json:"prefix_length,omitempty"`
 }
 
+// AddressGroupInput holds the address group input fields.
 type AddressGroupInput struct {
 	Name               *string           `json:"name,omitempty"`
 	Description        *string           `json:"description,omitempty"`
@@ -2157,37 +2173,44 @@ type AddressGroupInput struct {
 	AddressGroupString *string           `json:"address_group_string,omitempty"`
 }
 
+// AddressGroupResponse holds the address group response fields.
 type AddressGroupResponse struct {
 	UUID         *string            `json:"uuid,omitempty"`
 	AddressGroup *AddressGroupInput `json:"address_group,omitempty"`
 }
 
+// AddressGroupListEntry holds the address group list entry fields.
 type AddressGroupListEntry struct {
 	AddressGroup           *AddressGroupInput `json:"address_group,omitempty"`
 	AssociatedPoliciesList []*ReferenceValues `json:"associated_policies_list,omitempty"`
 }
 
+// AddressGroupListResponse holds the address group list response fields.
 type AddressGroupListResponse struct {
 	Metadata *ListMetadataOutput      `json:"metadata,omitempty"`
 	Entities []*AddressGroupListEntry `json:"entities,omitempty"`
 }
 
+// RecoveryPlanJobIntentInput holds the recovery plan job intent input fields.
 type RecoveryPlanJobIntentInput struct {
 	APIVersion *string          `json:"api_version,omitempty"`
 	Metadata   *Metadata        `json:"metadata"`
 	Spec       *RecoveryPlanJob `json:"spec"`
 }
 
+// RecoveryPlanJob holds the recovery plan job fields.
 type RecoveryPlanJob struct {
 	Name      *string                   `json:"name"`
 	Resources *RecoveryPlanJobResources `json:"resources"`
 }
 
+// RecoveryPlanJobResources holds the recovery plan job resources fields.
 type RecoveryPlanJobResources struct {
 	ExecutionParameters   *RecoveryPlanJobResourcesExecutionParameters `json:"execution_parameters"`
 	RecoveryPlanReference *Reference                                   `json:"recovery_plan_reference"`
 }
 
+// RecoveryPlanJobResourcesExecutionParameters holds the recovery plan job resources execution parameters fields.
 type RecoveryPlanJobResourcesExecutionParameters struct {
 	ActionType                        *string                 `json:"action_type"`
 	FailedAvailabilityZoneList        []*AvailabilityZoneList `json:"failed_availability_zone_list"`
@@ -2196,6 +2219,7 @@ type RecoveryPlanJobResourcesExecutionParameters struct {
 	ShouldContinueOnValidationFailure *bool                   `json:"should_continue_on_validation_failure,omitempty"`
 }
 
+// RecoveryPlanJobIntentResponse holds the recovery plan job intent response fields.
 type RecoveryPlanJobIntentResponse struct {
 	APIVersion *string                   `json:"api_version"`
 	Metadata   *Metadata                 `json:"metadata"`
@@ -2203,6 +2227,7 @@ type RecoveryPlanJobIntentResponse struct {
 	Status     *RecoveryPlanJobDefStatus `json:"status,omitempty"`
 }
 
+// RecoveryPlanJobDefStatus holds the recovery plan job def status fields.
 type RecoveryPlanJobDefStatus struct {
 	CleanupStatus                  *RecoveryPlanJobExecutionPhasesStatus `json:"cleanup_status,omitempty"`
 	EndTime                        *time.Time                            `json:"end_time,omitempty"`
@@ -2217,6 +2242,7 @@ type RecoveryPlanJobDefStatus struct {
 	WitnessAddress                 string                                `json:"witness_address,omitempty"`
 }
 
+// RecoveryPlanJobExecutionPhasesStatus holds the recovery plan job execution phases status fields.
 type RecoveryPlanJobExecutionPhasesStatus struct {
 	OperationStatus      *RecoveryPlanJobStepStatus `json:"operation_status,omitempty"`
 	PercentageComplete   *int32                     `json:"percentage_complete"`
@@ -2225,16 +2251,19 @@ type RecoveryPlanJobExecutionPhasesStatus struct {
 	Status               *string                    `json:"status"`
 }
 
+// RecoveryPlanJobStepStatus holds the recovery plan job step status fields.
 type RecoveryPlanJobStepStatus struct {
 	PercentageComplete *int32  `json:"percentage_complete"`
 	Status             *string `json:"status"`
 }
 
+// RecoveryPlanJobValidationInformation holds the recovery plan job validation information fields.
 type RecoveryPlanJobValidationInformation struct {
 	ErrorsList   []*RecoveryPlanValidationMessage `json:"errors_list"`
 	WarningsList []*RecoveryPlanValidationMessage `json:"warnings_list"`
 }
 
+// RecoveryPlanValidationMessage holds the recovery plan validation message fields.
 type RecoveryPlanValidationMessage struct {
 	AffectedAnyReferenceList      []*Reference                 `json:"affected_any_reference_list"`
 	CauseAndResolutionMessageList []*CauseAndResolutionMessage `json:"cause_and_resolution_message_list"`
@@ -2243,27 +2272,32 @@ type RecoveryPlanValidationMessage struct {
 	ValidationType                *string                      `json:"validation_type"`
 }
 
+// CauseAndResolutionMessage holds the cause and resolution message fields.
 type CauseAndResolutionMessage struct {
 	Cause          *string  `json:"cause"`
 	ResolutionList []string `json:"resolution_list"`
 }
 
+// RecoveryPlanJobResponse holds the recovery plan job response fields.
 type RecoveryPlanJobResponse struct {
 	TaskUUID string `json:"task_uuid,omitempty"`
 }
 
+// RecoveryPlanJobExecutionStatus holds the recovery plan job execution status fields.
 type RecoveryPlanJobExecutionStatus struct {
 	OperationStatus      *RecoveryPlanJobPhaseExecutionStatus `json:"operation_status,omitempty"`
 	PostprocessingStatus *RecoveryPlanJobPhaseExecutionStatus `json:"postprocessing_status,omitempty"`
 	PreprocessingStatus  *RecoveryPlanJobPhaseExecutionStatus `json:"preprocessing_status,omitempty"`
 }
 
+// RecoveryPlanJobPhaseExecutionStatus holds the recovery plan job phase execution status fields.
 type RecoveryPlanJobPhaseExecutionStatus struct {
 	PercentageComplete      int32                                 `json:"percentage_complete,omitempty"`
 	Status                  string                                `json:"status,omitempty"`
 	StepExecutionStatusList []*RecoveryPlanJobStepExecutionStatus `json:"step_execution_status_list"`
 }
 
+// RecoveryPlanJobStepExecutionStatus holds the recovery plan job step execution status fields.
 type RecoveryPlanJobStepExecutionStatus struct {
 	AnyEntityReferenceList  []*Reference                  `json:"any_entity_reference_list"`
 	EndTime                 *time.Time                    `json:"end_time,omitempty"`
@@ -2280,62 +2314,74 @@ type RecoveryPlanJobStepExecutionStatus struct {
 	StepUUID                *string                       `json:"step_uuid"`
 }
 
+// RecoveredEntityInformation holds the recovered entity information fields.
 type RecoveredEntityInformation struct {
 	ErrorDetail           string           `json:"error_detail,omitempty"`
 	RecoveredEntityInfo   *RecoveredEntity `json:"recovered_entity_info,omitempty"`
 	SourceEntityReference *Reference       `json:"source_entity_reference,omitempty"`
 }
 
+// RecoveredEntity holds the recovered entity fields.
 type RecoveredEntity struct {
 	EntityName string `json:"entity_name,omitempty"`
 	EntityUUID string `json:"entity_uuid,omitempty"`
 }
 
+// RecoveryPlanJobListResponse holds the recovery plan job list response fields.
 type RecoveryPlanJobListResponse struct {
 	APIVersion *string                          `json:"api_version"`
 	Entities   []*RecoveryPlanJobIntentResponse `json:"entities"`
 	Metadata   *ListMetadataOutput              `json:"metadata"`
 }
 
+// RecoveryPlanJobActionRequest holds the recovery plan job action request fields.
 type RecoveryPlanJobActionRequest struct {
 	RerunRecoveryPlanJobUUID               string `json:"rerun_recovery_plan_job_uuid,omitempty"`
 	ShouldContinueRerunOnValidationFailure *bool  `json:"should_continue_rerun_on_validation_failure,omitempty"`
 }
 
+// GroupsRequestedAttribute holds the groups requested attribute fields.
 type GroupsRequestedAttribute struct {
 	Attribute *string `json:"attribute"`
 }
 
+// GroupsGetEntitiesRequest holds the groups get entities request fields.
 type GroupsGetEntitiesRequest struct {
 	EntityType            *string                     `json:"entity_type"`
 	FilterCriteria        string                      `json:"filter_criteria,omitempty"`
 	GroupMemberAttributes []*GroupsRequestedAttribute `json:"group_member_attributes"`
 }
 
+// GroupsGetEntitiesResponse holds the groups get entities response fields.
 type GroupsGetEntitiesResponse struct {
 	FilteredGroupCount int64                `json:"filtered_group_count,omitempty"`
 	GroupResults       []*GroupsGroupResult `json:"group_results"`
 }
 
+// GroupsGroupResult holds the groups group result fields.
 type GroupsGroupResult struct {
 	EntityResults []*GroupsEntity `json:"entity_results"`
 }
 
+// GroupsEntity holds the groups entity fields.
 type GroupsEntity struct {
 	Data     []*GroupsFieldData `json:"data"`
 	EntityID string             `json:"entity_id,omitempty"`
 }
 
+// GroupsFieldData holds the groups field data fields.
 type GroupsFieldData struct {
 	Name   string                 `json:"name,omitempty"`
 	Values []*GroupsTimevaluePair `json:"values"`
 }
 
+// GroupsTimevaluePair holds the groups timevalue pair fields.
 type GroupsTimevaluePair struct {
 	Time   int64    `json:"time,omitempty"`
 	Values []string `json:"values"`
 }
 
+// AvailabilityZoneIntentResponse holds the availability zone intent response fields.
 type AvailabilityZoneIntentResponse struct {
 	APIVersion *string                 `json:"api_version"`
 	Metadata   *Metadata               `json:"metadata"`
