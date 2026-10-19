@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- V3 GetPrismCentral sends an empty GET request body, matching the bundled legacy/internal endpoint schema, while preserving response decoding. Live endpoint compatibility and public API support are not established by this local regression check.
+
 - V3 image upload file-open and request-construction errors retain their causes for errors.Is/errors.As while preserving their diagnostic text.
 
 - Shared client construction retains the system certificate pool error cause for errors.Is/errors.As while preserving its diagnostic text.

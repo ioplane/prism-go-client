@@ -407,3 +407,18 @@ Context7 `/golang/go`, pinned stdlib `fmt/errors.go` и `errors/errors.go`.
 Свежие validation errors, прямые возвращаемые ошибки и намеренно игнорируемые
 Close errors сохраняют прежние контракты; ограничения maximum profile
 учитываются отдельно. Этот срез не закрывает полный strict SDK gate.
+
+## Совместимость GetPrismCentral
+
+`Operations.GetPrismCentral` отправляет GET `/prism_central` без тела запроса.
+Это соответствует bundled `v3/swagger.json`: GET не объявляет parameters,
+endpoint помечен `x-internal: true`. Прежняя реализация кодировала пустую модель
+ответа в 19 байт `{"resources":null}\n`. Сигнатура метода, модель ответа,
+настроенные headers `Content-Type`, `Accept`, `User-Agent` и authentication
+headers, а также передача caller context через `Do` сохраняются. Request
+framing, включая `Content-Length`, соответствует новому пустому телу.
+
+Изолированный HTTP-тест проверяет method, path, нулевое тело и декодирование
+`PrismCentral.Resources`. Проверка live Prism Central не выполнена; исправление
+legacy/internal endpoint не подтверждает его public support или совместимость
+с конкретной серверной версией. Существующий внешний Keploy-тест сохраняется.

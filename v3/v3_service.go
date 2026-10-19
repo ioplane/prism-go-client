@@ -2336,7 +2336,7 @@ func (op Operations) GetPrismCentral(ctx context.Context) (*models.PrismCentral,
 	path := "/prism_central"
 	response := new(models.PrismCentral)
 
-	req, err := op.client.NewRequest(http.MethodGet, path, response)
+	req, err := op.client.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}

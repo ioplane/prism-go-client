@@ -4096,6 +4096,37 @@ func TestOperations_GetAvailabilityZone(t *testing.T) {
 	})
 }
 
+func TestGetPrismCentralRequest(t *testing.T) {
+	t.Parallel()
+
+	mux, client, server := setup(t)
+	t.Cleanup(server.Close)
+
+	const path = "/api/nutanix/v3/prism_central"
+	mux.HandleFunc(path, func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodGet)
+		assert.Equal(t, path, request.URL.Path)
+
+		body, err := io.ReadAll(request.Body)
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		t.Logf("GetPrismCentral request body bytes: %d", len(body))
+		assert.Empty(t, body)
+		testFprint(t, writer, `{"resources":{"type":"PC","version":"fixture-version","pc_vm_list":[]}}`)
+	})
+
+	op := Operations{client: client}
+	got, err := op.GetPrismCentral(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.NotNil(t, got.Resources)
+	assert.Equal(t, "PC", ptr.Deref(got.Resources.Type, ""))
+	assert.Equal(t, "fixture-version", ptr.Deref(got.Resources.Version, ""))
+	assert.NotNil(t, got.Resources.PcVMList)
+}
+
 func TestOperations_GetPrismCentral(t *testing.T) {
 	creds := testhelpers.CredentialsFromEnvironment(t)
 	// Changing insecure to true as that leads to modifying the transport underneath
