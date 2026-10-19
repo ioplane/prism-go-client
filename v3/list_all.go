@@ -25,16 +25,11 @@ func listAllPages(ctx context.Context, request DSMetadata, fetch func(*DSMetadat
 			return err
 		}
 
-		if err := validateListMetadata(metadata, offset); err != nil {
+		if err := validateListMetadata(metadata, offset, count, len(request.ClientSideFilters)); err != nil {
 			return err
 		}
 
 		matches, length := *metadata.TotalMatches, *metadata.Length
-
-		observed := int64(count)
-		if observed < 0 || observed > length || (len(request.ClientSideFilters) == 0 && observed != length) {
-			return errors.New("list pagination entity count does not match metadata")
-		}
 
 		if offset == 0 {
 			total = matches
@@ -61,7 +56,7 @@ func recoveryPlanPageMetadata(metadata *models.RecoveryPlanListMetadataOutput) *
 	return &ListMetadataOutput{Offset: &metadata.Offset, Length: &metadata.Length, TotalMatches: &metadata.TotalMatches}
 }
 
-func validateListMetadata(metadata *ListMetadataOutput, offset int64) error {
+func validateListMetadata(metadata *ListMetadataOutput, offset int64, count, clientSideFilterCount int) error {
 	if metadata == nil || metadata.TotalMatches == nil || metadata.Length == nil || metadata.Offset == nil {
 		return errors.New("incomplete list pagination metadata")
 	}
@@ -69,6 +64,11 @@ func validateListMetadata(metadata *ListMetadataOutput, offset int64) error {
 	matches, length := *metadata.TotalMatches, *metadata.Length
 	if matches < 0 || *metadata.Offset != offset || length < 0 || length > itemsPerPage || offset > matches || length > matches-offset {
 		return errors.New("invalid list pagination metadata")
+	}
+
+	observed := int64(count)
+	if observed < 0 || observed > length || (clientSideFilterCount == 0 && observed != length) {
+		return errors.New("list pagination entity count does not match metadata")
 	}
 
 	return nil

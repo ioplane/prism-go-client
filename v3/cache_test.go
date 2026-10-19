@@ -332,3 +332,12 @@ func TestValidateCredentials(t *testing.T) {
 		})
 	}
 }
+
+// set adds the client to the cache.
+func (c *ClientCache) set(clientName, validationHash string, client *Client) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	c.cache[clientName] = client
+	c.validationHashes[clientName] = validationHash
+}

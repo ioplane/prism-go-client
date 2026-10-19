@@ -96,13 +96,28 @@ func (c *ClientCache) GetOrCreateWithContext(ctx context.Context, params types.C
 	return c.acquireClient(ctx, key, endpoint, hash, opts)
 }
 
-func (c *ClientCache) acquireClient(ctx context.Context, key string, endpoint types.ManagementEndpoint, hash string, opts []types.ClientOption[Client]) (*Client, error) {
+// Delete invalidates the cached entry and any pending publication for its key.
+func (c *ClientCache) Delete(params types.CachedClientParams) {
+	key := params.Key()
+
+	c.mtx.Lock()
+	retired := c.cache[key]
+	delete(c.cache, key)
+	delete(c.validationHashes, key)
+	delete(c.creating, key)
+	c.mtx.Unlock()
+	retired.closeIdleConnections()
+}
+
+func (c *ClientCache) acquireClient(
+	ctx context.Context, key string, endpoint types.ManagementEndpoint, hash string, opts []types.ClientOption[Client],
+) (*Client, error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 
-		if client, cachedHash, _ := c.get(key); client != nil && cachedHash == hash {
+		if client, cachedHash, err := c.get(key); err == nil && client != nil && cachedHash == hash {
 			return client, nil
 		}
 
@@ -129,7 +144,9 @@ func (c *ClientCache) acquireClient(ctx context.Context, key string, endpoint ty
 	}
 }
 
-func (c *ClientCache) create(ctx context.Context, key string, endpoint types.ManagementEndpoint, opts []types.ClientOption[Client], pending *clientCreation) (*Client, error) {
+func (c *ClientCache) create(
+	ctx context.Context, key string, endpoint types.ManagementEndpoint, opts []types.ClientOption[Client], pending *clientCreation,
+) (*Client, error) {
 	client, err := c.newClient(ctx, key, endpoint, opts...)
 	c.mtx.Lock()
 
@@ -165,7 +182,9 @@ func (c *ClientCache) create(ctx context.Context, key string, endpoint types.Man
 	return client, nil
 }
 
-func (c *ClientCache) newClient(ctx context.Context, key string, managementEndpoint types.ManagementEndpoint, opts ...types.ClientOption[Client]) (*Client, error) {
+func (c *ClientCache) newClient(
+	ctx context.Context, key string, managementEndpoint types.ManagementEndpoint, opts ...types.ClientOption[Client],
+) (*Client, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -230,7 +249,7 @@ func validateCredentials(credentials prismgoclient.Credentials, key string) erro
 	return nil
 }
 
-// Get returns the client and the validation hash for the given client name.
+// get returns the client and the validation hash for the given client name.
 func (c *ClientCache) get(clientName string) (*Client, string, error) {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
@@ -246,28 +265,6 @@ func (c *ClientCache) get(clientName string) (*Client, string, error) {
 	}
 
 	return clnt, validationHash, nil
-}
-
-// Set adds the client to the cache.
-func (c *ClientCache) set(clientName string, validationHash string, client *Client) {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
-
-	c.cache[clientName] = client
-	c.validationHashes[clientName] = validationHash
-}
-
-// Delete invalidates the cached entry and any pending publication for its key.
-func (c *ClientCache) Delete(params types.CachedClientParams) {
-	key := params.Key()
-
-	c.mtx.Lock()
-	retired := c.cache[key]
-	delete(c.cache, key)
-	delete(c.validationHashes, key)
-	delete(c.creating, key)
-	c.mtx.Unlock()
-	retired.closeIdleConnections()
 }
 
 func (c *Client) closeIdleConnections() {
