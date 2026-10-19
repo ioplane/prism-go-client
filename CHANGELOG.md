@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Client-side filters with the same name are evaluated as separate AND predicates with their own allowed values, preserving value/base-path OR matching, entity order and original metadata.
+
 - Kubernetes environment providers reject a missing credential reference with a configuration error before accessing informers, instead of panicking or falling back to another provider. Valid references and original Secret lookup errors are preserved.
 
 - Environment lookups continue to the next provider for wrapped ErrNotFound errors and return the canonical missing-key error after exhaustion. Hard errors and successful nil values still stop lookup, preserving provider order and original hard-error identity.

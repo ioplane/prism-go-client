@@ -675,6 +675,45 @@ func TestDoWithFilters_filter(t *testing.T) {
 	}
 }
 
+func TestFilterDuplicateNames(t *testing.T) {
+	input := `{"entities":[{"name":"a"},{"name":"b"},{"name":"c"}],"metadata":{"length":3}}`
+	first := &prismgoclient.AdditionalFilter{Name: "name", Values: []string{"a", "b"}}
+	tests := []struct {
+		name     string
+		second   *prismgoclient.AdditionalFilter
+		expected string
+	}{
+		{
+			name:     "identical predicates",
+			second:   first,
+			expected: `{"entities":[{"name":"a"},{"name":"b"}],"metadata":{"length":3}}`,
+		},
+		{
+			name:     "intersecting values",
+			second:   &prismgoclient.AdditionalFilter{Name: "name", Values: []string{"b", "c"}},
+			expected: `{"entities":[{"name":"b"}],"metadata":{"length":3}}`,
+		},
+		{
+			name:     "disjoint values",
+			second:   &prismgoclient.AdditionalFilter{Name: "name", Values: []string{"c"}},
+			expected: `{"entities":null,"metadata":{"length":3}}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			body, err := filter(io.NopCloser(strings.NewReader(input)),
+				[]*prismgoclient.AdditionalFilter{first, test.second}, []string{"$"})
+			require.NoError(t, err)
+
+			actual, err := io.ReadAll(body)
+			require.NoError(t, err)
+			require.NoError(t, body.Close())
+			assert.JSONEq(t, test.expected, string(actual))
+		})
+	}
+}
+
 // *************************************
 
 func TestClient_NewRequest(t *testing.T) {

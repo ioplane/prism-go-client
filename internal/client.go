@@ -790,15 +790,13 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 	}
 
 	// Full search paths
-	searchPaths := map[string][]string{}
-	filterMap := map[string]*prismgoclient.AdditionalFilter{}
+	searchPaths := make([][]string, len(filters))
 
-	for _, filter := range filters {
+	for index, filter := range filters {
 		if filter == nil {
 			return nil, fmt.Errorf("additional filter must not be nil")
 		}
 
-		filterMap[filter.Name] = filter
 		// Build search paths by appending target search paths to base paths
 		filterSearchPaths := []string{}
 
@@ -807,7 +805,7 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 			filterSearchPaths = append(filterSearchPaths, searchPath)
 		}
 
-		searchPaths[filter.Name] = filterSearchPaths
+		searchPaths[index] = filterSearchPaths
 	}
 
 	// Entities that pass filters
@@ -827,15 +825,15 @@ func filter(body io.ReadCloser, filters []*prismgoclient.AdditionalFilter, baseS
 		filtersPassed := 0
 
 	filter_loop:
-		for filter, filterSearchPaths := range searchPaths {
-			for _, searchPath := range filterSearchPaths {
+		for index, filter := range filters {
+			for _, searchPath := range searchPaths[index] {
 				val, err := jsonpath.Get(searchPath, searchTarget)
 				if err != nil {
 					continue
 				}
 				// Stringify leaf value since we support only string values in filter
 				value := fmt.Sprint(val)
-				if searchSlice(filterMap[filter].Values, value) {
+				if searchSlice(filter.Values, value) {
 					filtersPassed++
 
 					continue filter_loop

@@ -368,3 +368,17 @@ current SDK profile (6 linters) — 0 issues; changed Go files — gofmt clean.
 sort/filter preservation, nil/empty JSON и host single-fetch. 117 exported
 Operations signatures, Service и host wrapper совпадают с parent
 `031ad8c9d9871ecede484178745a479fd65dd9cf`; binary ABI не измеряется.
+
+
+## Совместимость повторяющихся client-side filters
+
+`um-docs-nrsu.6.10.6.2`: каждый исходный `AdditionalFilter` участвует в AND,
+включая повторяющийся `Name`; `Values` каждого предиката и его base paths
+связаны OR. Одинаковые предикаты сохраняют совпадения, разные списки значений
+дают пересечение. Публичные signatures/JSON, порядок entities, исходная
+metadata.length и `entities:null` при отсутствии совпадений сохраняются.
+
+Пустые filters возвращают исходный непрочитанный body; bounded read, порядок
+ошибок JSON/nil filter/entity shape, прежний default base path `$.` и владение
+body не меняются. Это локальное исправление SDK; оно не подтверждает поведение
+Prism, production или готовность полного maximum lint gate.
