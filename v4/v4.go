@@ -2,7 +2,9 @@ package v4
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -105,9 +107,15 @@ type Client struct {
 	readTimeout                       time.Duration
 }
 
-// WithReadTimeout sets the read timeout in minutes for large transfers (e.g. OVA/image). Zero keeps SDK default.
+var errReadTimeoutOverflow = errors.New("read timeout in minutes exceeds time.Duration range")
+
+// WithReadTimeout sets the read timeout in minutes for large transfers (e.g. OVA/image).
+// Non-positive values keep the current setting; overflowing positive values return an error.
 func WithReadTimeout(minutes int) types.ClientOption[Client] {
 	return func(c *Client) error {
+		if int64(minutes) > math.MaxInt64/int64(time.Minute) {
+			return errReadTimeoutOverflow
+		}
 		if minutes > 0 {
 			c.readTimeout = time.Duration(minutes) * time.Minute
 		}

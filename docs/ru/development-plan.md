@@ -437,3 +437,20 @@ credentials и предшествующих options, block type и DER сохр�
 ошибке сохраняются. Cache добавляет endpoint bundle после caller options
 и передаёт constructor error через прежнюю обёртку. Signatures, TLS defaults,
 generated models, пустые значения JSON и cache identity не изменяются.
+
+## Совместимость read timeout v4
+
+`WithReadTimeout` отклоняет положительное число минут больше `153722867`
+с ошибкой `read timeout in minutes exceeds time.Duration range` до изменения
+настройки client. Граница соответствует целым минутам, представимым в
+`time.Duration` (int64 наносекунд); источник — Context7 `/golang/go` и
+pinned stdlib `src/time/time.go`. Конструктор `NewV4Client` возвращает nil
+client и прежнюю обёртку `failed to apply client option: %w` с сохранением
+cause до инициализации API.
+
+Ноль и отрицательные значения сохраняют предыдущую настройку, включая SDK
+default при отсутствии положительного option. Представимые положительные
+значения передаются без изменения в `ReadTimeout` VMM и data policies;
+остальные API-домены и cache option policy не меняются. Public signatures,
+wire models и generated files сохраняются. Активный node driver использует
+v3: этот срез не меняет его SDK pin и не подтверждает live Prism поведение.
