@@ -17,8 +17,18 @@ make -f Makefile.dev dev-build
 make -f Makefile.dev check
 ```
 
+For the equivalent Compose development environment, pass the current commit SHA
+to the image build:
+
+```sh
+export SOURCE_REVISION="$(git rev-parse HEAD)"
+podman compose --profile dev build dev
+podman compose --profile dev run --rm dev bash
+```
+
 The development image runs as UID 65532 with read-only source mounts and
-SDK-specific writable caches. The blocking checks cover module consistency,
+SDK-specific writable caches through both Make and Compose. The blocking checks
+cover module consistency,
 transport regressions, all offline unit packages with race detection, vet/build
 and root-module govulncheck. The lint gate applies the committed `.golangci.yaml`
 to the root module, hidden `.ci` package and independent `nusights` module.

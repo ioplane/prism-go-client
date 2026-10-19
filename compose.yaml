@@ -5,15 +5,20 @@ services:
     build:
       context: .
       dockerfile: Containerfile.dev
+      args:
+        SOURCE_REVISION: ${SOURCE_REVISION:?Set SOURCE_REVISION to the current commit SHA}
     working_dir: /src
     volumes:
-      - .:/src:z
+      - .:/src:ro,z
       - modules:/cache/modules
       - build:/cache/build
+      - lint:/cache/lint
     profiles: [dev]
     command: [bash]
 volumes:
   modules:
-    name: ioplane-nutanix-driver-go-modules
+    name: ioplane-prism-sdk-go-modules
   build:
-    name: ioplane-nutanix-driver-go-build
+    name: ioplane-prism-sdk-go-build
+  lint:
+    name: ioplane-prism-sdk-go-lint
