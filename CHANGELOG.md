@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- V3 nonempty PEM trust bundles that add no certificates return a configuration error instead of silently leaving the trust store unchanged. Empty bundles remain a no-op; valid bundles, PEM decoding tolerance and existing block-type/DER errors are preserved.
+
 - V3 GetPrismCentral sends an empty GET request body, matching the bundled legacy/internal endpoint schema, while preserving response decoding. Live endpoint compatibility and public API support are not established by this local regression check.
 
 - V3 image upload file-open and request-construction errors retain their causes for errors.Is/errors.As while preserving their diagnostic text.

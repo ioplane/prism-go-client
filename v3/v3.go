@@ -21,6 +21,8 @@ const (
 	userAgent      = "nutanix/" + libraryVersion
 )
 
+var errCertBundleNoCertificates = errors.New("certificate bundle contains no certificates")
+
 // Client manages the V3 API.
 type Client struct {
 	client *internal.Client
@@ -41,6 +43,8 @@ func WithCertificate(certificate *x509.Certificate) types.ClientOption[Client] {
 // WithPEMEncodedCertBundle sets the certificates for the client.
 func WithPEMEncodedCertBundle(certBundle []byte) types.ClientOption[Client] {
 	return func(client *Client) error {
+		initialOptionCount := len(client.clientOpts)
+
 		for block, rest := pem.Decode(certBundle); block != nil; block, rest = pem.Decode(rest) {
 			if block.Type != "CERTIFICATE" {
 				return fmt.Errorf("unexpected PEM block type %q: was expecting CERTIFICATE", block.Type)
@@ -54,6 +58,10 @@ func WithPEMEncodedCertBundle(certBundle []byte) types.ClientOption[Client] {
 			for _, cert := range certs {
 				client.clientOpts = append(client.clientOpts, internal.WithCertificate(cert))
 			}
+		}
+
+		if len(certBundle) > 0 && len(client.clientOpts) == initialOptionCount {
+			return errCertBundleNoCertificates
 		}
 
 		return nil

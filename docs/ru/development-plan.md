@@ -422,3 +422,18 @@ framing, включая `Content-Length`, соответствует новом�
 `PrismCentral.Resources`. Проверка live Prism Central не выполнена; исправление
 legacy/internal endpoint не подтверждает его public support или совместимость
 с конкретной серверной версией. Существующий внешний Keploy-тест сохраняется.
+
+## Совместимость PEM trust bundle v3
+
+`WithPEMEncodedCertBundle` возвращает `certificate bundle contains no certificates`,
+если непустой bundle не добавляет ни одного сертификата: input без декодируемого
+PEM block и CERTIFICATE block с пустым DER больше не принимаются как no-op.
+Пустой input остаётся no-op; корректные одиночные и множественные сертификаты
+добавляются в прежнем порядке в дополнение к system trust store.
+
+Поиск PEM blocks сохраняет допустимый leading/trailing material. Ошибки
+credentials и предшествующих options, block type и DER сохраняют прежний
+приоритет и текст; ранее добавленные certificate options при последующей
+ошибке сохраняются. Cache добавляет endpoint bundle после caller options
+и передаёт constructor error через прежнюю обёртку. Signatures, TLS defaults,
+generated models, пустые значения JSON и cache identity не изменяются.
