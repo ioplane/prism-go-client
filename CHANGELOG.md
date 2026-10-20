@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- V4 iterators yield OData option errors once before making API calls, preserving their cause for errors.Is instead of silently reporting an empty result.
+
 - V4 WithReadTimeout rejects positive minute values that overflow time.Duration before changing the client setting. Non-positive values remain a no-op; representable positive values retain their exact VMM/data policies SDK ReadTimeout propagation. Constructor errors preserve the option error cause.
 
 - V3 nonempty PEM trust bundles that add no certificates return a configuration error instead of silently leaving the trust store unchanged. Empty bundles remain a no-op; valid bundles, PEM decoding tolerance and existing block-type/DER errors are preserved.

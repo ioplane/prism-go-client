@@ -445,6 +445,7 @@ func NewIterator[R APIResponse, T any](
 
 		reqParams, err := OptsToV4ODataParams(opts...)
 		if err != nil {
+			yield(zero, err)
 			return
 		}
 
