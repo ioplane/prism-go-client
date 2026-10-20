@@ -1,8 +1,10 @@
-package types
+package types_test
 
 import (
 	"net/url"
 	"testing"
+
+	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,10 +17,10 @@ func TestCachedClientParams(t *testing.T) {
 		require.NoError(t, err)
 
 		params := &testCachedClientParams{
-			endpoint: ManagementEndpoint{
-				ApiCredentials: ApiCredentials{
-					Username: "testuser",
-					Password: "testpass",
+			endpoint: types.ManagementEndpoint{
+				ApiCredentials: types.ApiCredentials{
+					Username: fixtureUsername,
+					Password: fixturePassword,
 				},
 				Address: testURL,
 			},
@@ -30,13 +32,13 @@ func TestCachedClientParams(t *testing.T) {
 	})
 }
 
-// testCachedClientParams is a test implementation of CachedClientParams
+// testCachedClientParams is a test implementation of CachedClientParams.
 type testCachedClientParams struct {
-	endpoint ManagementEndpoint
+	endpoint types.ManagementEndpoint
 	key      string
 }
 
-func (t *testCachedClientParams) ManagementEndpoint() ManagementEndpoint {
+func (t *testCachedClientParams) ManagementEndpoint() types.ManagementEndpoint {
 	return t.endpoint
 }
 

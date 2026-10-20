@@ -2,22 +2,25 @@ package credentials
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
 )
 
+// ParseCredentials reads and validates the first endpoint credential entry.
 func ParseCredentials(credsData []byte) (*types.ApiCredentials, error) {
 	creds := &NutanixCredentials{}
+
 	err := json.Unmarshal(credsData, &creds.Credentials)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal the credentials data. %w", err)
 	}
 
 	credentials := &types.ApiCredentials{}
-	// TODO only single API endpoint supported
+	// Only the first endpoint credential entry is used.
 	if len(creds.Credentials) == 0 {
-		return nil, fmt.Errorf("no credentials found")
+		return nil, errors.New("no credentials found")
 	}
 
 	// Do not error out for multiple API endpoint credentials, just use the first one as existing code does,

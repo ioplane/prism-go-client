@@ -2,7 +2,9 @@ package v4
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -10,6 +12,10 @@ import (
 
 	clusterApi "github.com/nutanix/ntnx-api-golang-clients/clustermgmt-go-client/v4/api"
 	clusterClient "github.com/nutanix/ntnx-api-golang-clients/clustermgmt-go-client/v4/client"
+	datapoliciesApi "github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4/api"
+	datapoliciesClient "github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4/client"
+	iamApi "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/api"
+	iamClient "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/client"
 	monitoringApi "github.com/nutanix/ntnx-api-golang-clients/monitoring-go-client/v4/api"
 	monitoringClient "github.com/nutanix/ntnx-api-golang-clients/monitoring-go-client/v4/client"
 	multidomainApi "github.com/nutanix/ntnx-api-golang-clients/multidomain-go-client/v4/api"
@@ -20,10 +26,6 @@ import (
 	prismClient "github.com/nutanix/ntnx-api-golang-clients/prism-go-client/v4/client"
 	vmApi "github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4/api"
 	vmClient "github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4/client"
-	datapoliciesApi "github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4/api"
-	datapoliciesClient "github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4/client"
-	iamApi "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/api"
-	iamClient "github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4/client"
 	volumesApi "github.com/nutanix/ntnx-api-golang-clients/volumes-go-client/v4/api"
 	volumesClient "github.com/nutanix/ntnx-api-golang-clients/volumes-go-client/v4/client"
 
@@ -105,9 +107,15 @@ type Client struct {
 	readTimeout                       time.Duration
 }
 
-// WithReadTimeout sets the read timeout in minutes for large transfers (e.g. OVA/image). Zero keeps SDK default.
+var errReadTimeoutOverflow = errors.New("read timeout in minutes exceeds time.Duration range")
+
+// WithReadTimeout sets the read timeout in minutes for large transfers (e.g. OVA/image).
+// Non-positive values keep the current setting; overflowing positive values return an error.
 func WithReadTimeout(minutes int) types.ClientOption[Client] {
 	return func(c *Client) error {
+		if int64(minutes) > math.MaxInt64/int64(time.Minute) {
+			return errReadTimeoutOverflow
+		}
 		if minutes > 0 {
 			c.readTimeout = time.Duration(minutes) * time.Minute
 		}
@@ -118,6 +126,19 @@ func WithReadTimeout(minutes int) types.ClientOption[Client] {
 type endpointInfo struct {
 	host string
 	port int
+}
+
+// endpointParseError retains the parse cause without echoing endpoint credentials.
+type endpointParseError struct {
+	cause error
+}
+
+func (e *endpointParseError) Error() string {
+	return "error parsing API endpoint"
+}
+
+func (e *endpointParseError) Unwrap() error {
+	return e.cause
 }
 
 // NewV4Client return an internal to operate V4 resources
@@ -135,61 +156,64 @@ func NewV4Client(credentials prismgoclient.Credentials, opts ...types.ClientOpti
 	v4Client := &Client{}
 
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, fmt.Errorf("client option must not be nil")
+		}
 		if err := opt(v4Client); err != nil {
-			return nil, fmt.Errorf("failed to apply client option: %v", err)
+			return nil, fmt.Errorf("failed to apply client option: %w", err)
 		}
 	}
 
 	if err := initVmApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create VM API instance: %v", err)
+		return nil, fmt.Errorf("failed to create VM API instance: %w", err)
 	}
 
 	if err := initSubnetApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Subnet API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Subnet API instance: %w", err)
 	}
 
 	if err := initClusterApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Cluster API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Cluster API instance: %w", err)
 	}
 
 	if err := initPrismApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Tasks API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Tasks API instance: %w", err)
 	}
 
 	if err := initVolumesApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Volumes API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Volumes API instance: %w", err)
 	}
 
 	if err := initUsersApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Users API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Users API instance: %w", err)
 	}
 
 	if err := initRolesApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Roles API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Roles API instance: %w", err)
 	}
 
 	if err := initRoleMembershipApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Role Membership API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Role Membership API instance: %w", err)
 	}
 
 	if err := initOperationsApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Operations API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Operations API instance: %w", err)
 	}
 
 	if err := initAuthorizationPoliciesApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Authorization Policies API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Authorization Policies API instance: %w", err)
 	}
 
 	if err := initDataPoliciesApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Data Policies API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Data Policies API instance: %w", err)
 	}
 
 	if err := initProjectsApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Projects API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Projects API instance: %w", err)
 	}
 
 	if err := initAlertsServiceApiInstance(v4Client, credentials); err != nil {
-		return nil, fmt.Errorf("failed to create Alerts API instance: %v", err)
+		return nil, fmt.Errorf("failed to create Alerts API instance: %w", err)
 	}
 
 	return v4Client, nil
@@ -442,7 +466,7 @@ func initAuthorizationPoliciesApiInstance(v4Client *Client, credentials prismgoc
 func getEndpointInfo(credentials prismgoclient.Credentials) (*endpointInfo, error) {
 	u, err := url.Parse(fmt.Sprintf("https://%s", credentials.Endpoint))
 	if err != nil {
-		return nil, err
+		return nil, &endpointParseError{cause: err}
 	}
 	h := u.Hostname()
 	port := u.Port()
@@ -451,7 +475,7 @@ func getEndpointInfo(credentials prismgoclient.Credentials) (*endpointInfo, erro
 	}
 	p, err := strconv.Atoi(port)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert port number to int: %v", err)
+		return nil, &endpointParseError{cause: err}
 	}
 	return &endpointInfo{
 		host: h,

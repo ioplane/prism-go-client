@@ -3,7 +3,7 @@ package v3
 import (
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -306,6 +306,27 @@ wFZUTKiL8IkyhtyTMr5NGvo1dbU=
 	})
 }
 
+func TestWithPEMEncodedCertBundleRequiresCertificate(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		name   string
+		bundle string
+	}{
+		{name: "undecodable input", bundle: "not a PEM certificate"},
+		{name: "empty DER certificate", bundle: "-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var client Client
+
+			err := WithPEMEncodedCertBundle([]byte(testCase.bundle))(&client)
+			require.Error(t, err)
+		})
+	}
+}
+
 func TestWithRoundTripper(t *testing.T) {
 	t.Run("valid round tripper", func(t *testing.T) {
 		transport := &http.Transport{}
@@ -488,8 +509,8 @@ HMUfpIBvFSDJ3gyICh3WZlXi/EjJKSZp4A==
 		}
 
 		// Create an option that returns an error
-		invalidOpt := func(c *Client) error {
-			return fmt.Errorf("invalid option")
+		invalidOpt := func(_ *Client) error {
+			return errors.New("invalid option")
 		}
 
 		client, err := NewV3Client(credentials, invalidOpt)

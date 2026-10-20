@@ -1,10 +1,8 @@
+// Package secretdir reads endpoint settings and credentials from mounted secret files.
 package secretdir
 
-/*
- Read credentials in CSI format from k8s secret mounted at $CSI_SECRET_DIR.
-*/
-
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -16,23 +14,36 @@ import (
 )
 
 const (
-	secretKeyName        = "key"
-	secretKeyCertName    = "cert"
-	secretKeyEndpoint    = "endpoint"
-	secretKeyInsecure    = "insecure"
-	secretKeyCredentials = credentials.KeyName
-	envCSISecretDir      = "CSI_SECRET_DIR"
-	envSecretDir         = "SECRET_DIR"
+	csiCredentialFieldCount = 4
+	csiPasswordIndex        = 3
+	secretKeyName           = "key"
+	secretKeyCertName       = "cert"
+	secretKeyEndpoint       = "endpoint"
+	secretKeyInsecure       = "insecure"
+	secretKeyCredentials    = credentials.KeyName
+	envCSISecretDir         = "CSI_SECRET_DIR"
+	envSecretDir            = "SECRET_DIR"
 )
 
-var ErrMissingValue = fmt.Errorf("missing information in secret value " +
+// ErrMissingValue identifies a malformed legacy CSI credential value.
+var ErrMissingValue = errors.New("missing information in secret value " +
 	"'<prism-ip>:<prism-port>:<user>:<password>'")
 
 type provider struct{}
 
-// GetManagementEndpoint returns PC credentials independent of HCI cluster
-func (prov *provider) GetManagementEndpoint(
-	topology types.Topology,
+type endpointParseError struct {
+	cause error
+}
+
+func (*endpointParseError) Error() string {
+	return "error parsing secret directory environment endpoint"
+}
+
+func (err *endpointParseError) Unwrap() error { return err.cause }
+
+// GetManagementEndpoint returns PC credentials independent of HCI cluster.
+func (*provider) GetManagementEndpoint(
+	_ types.Topology,
 ) (*types.ManagementEndpoint, error) {
 	path := os.Getenv(envSecretDir)
 	if path == "" {
@@ -43,40 +54,52 @@ func (prov *provider) GetManagementEndpoint(
 				envSecretDir, envCSISecretDir)
 		}
 	}
+
 	return getMgmtEndpointFromSecretDir(path)
 }
 
-// Get doesn't return any settings from CSI secret
-func (prov *provider) Get(topology types.Topology, key string) (
-	interface{}, error,
+// Get doesn't return any settings from CSI secret.
+func (*provider) Get(_ types.Topology, _ string) (
+	any, error,
 ) {
 	return nil, types.ErrNotFound
 }
 
+// NewProvider returns a provider backed by a mounted secret directory.
 func NewProvider() types.Provider {
 	return &provider{}
 }
 
-// read parameters return "" for non-existing keys
+// read parameters return "" for non-existing keys.
 func readParam(path, key string) (string, error) {
-	if b, err := os.ReadFile(filepath.Join(path, key)); err == nil {
-		return string(b), err
-	} else if os.IsNotExist(err) {
-		return "", nil
-	} else {
-		return "", err
+	data, readErr := os.ReadFile(filepath.Join(path, key))
+	if readErr == nil {
+		return string(data), nil
 	}
+
+	if os.IsNotExist(readErr) {
+		return "", nil
+	}
+
+	return "", readErr
 }
 
-func getApiEndpoint(path string) (*url.URL, error) {
+func getAPIEndpoint(path string) (*url.URL, error) {
 	endpoint, err := readParam(path, secretKeyEndpoint)
 	if err != nil {
 		return nil, err
 	}
+
 	if endpoint == "" {
-		return nil, fmt.Errorf("no endpoint is provided in secret value")
+		return nil, errors.New("no endpoint is provided in secret value")
 	}
-	return url.Parse(fmt.Sprintf("https://%s", endpoint))
+
+	address, err := url.Parse("https://" + endpoint)
+	if err != nil {
+		return nil, &endpointParseError{cause: err}
+	}
+
+	return address, nil
 }
 
 func getInsecure(path string) (bool, error) {
@@ -84,9 +107,11 @@ func getInsecure(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	if val == "" {
 		return false, nil
 	}
+
 	switch val {
 	case "True", "true", "1", "on", "yes":
 		return true, nil
@@ -105,19 +130,23 @@ func getMgmtEndpointFromSecretDir(path string) (
 	if err != nil {
 		return nil, err
 	}
+
 	if credsData != "" {
-		apiCreds, err := credentials.ParseCredentials([]byte(credsData))
-		if err != nil {
-			return nil, err
+		apiCreds, parseErr := credentials.ParseCredentials([]byte(credsData))
+		if parseErr != nil {
+			return nil, parseErr
 		}
-		addr, err := getApiEndpoint(path)
-		if err != nil {
-			return nil, err
+
+		addr, endpointErr := getAPIEndpoint(path)
+		if endpointErr != nil {
+			return nil, endpointErr
 		}
-		insecure, err := getInsecure(path)
-		if err != nil {
-			return nil, err
+
+		insecure, insecureErr := getInsecure(path)
+		if insecureErr != nil {
+			return nil, insecureErr
 		}
+
 		return &types.ManagementEndpoint{
 			Address:        addr,
 			Insecure:       insecure,
@@ -130,38 +159,38 @@ func getMgmtEndpointFromSecretDir(path string) (
 	if err != nil {
 		return nil, err
 	}
+
 	if certString != "" {
 		// TLS key pair
-		addr, err := getApiEndpoint(path)
-		if err != nil {
-			return nil, err
+		addr, endpointErr := getAPIEndpoint(path)
+		if endpointErr != nil {
+			return nil, endpointErr
 		}
+
 		return &types.ManagementEndpoint{
-			ApiCredentials: types.ApiCredentials{
-				KeyPair: certString,
-			},
-			Address: addr,
-		}, nil
-	} else {
-		// basic auth
-		str, err := readParam(path, secretKeyName)
-		if err != nil {
-			return nil, err
-		}
-		creds := strings.SplitN(str, ":", 4)
-		if len(creds) != 4 {
-			return nil, ErrMissingValue
-		}
-		addr, err := url.Parse(fmt.Sprintf("https://%s:%s", creds[0], creds[1]))
-		if err != nil {
-			return nil, err
-		}
-		return &types.ManagementEndpoint{
-			ApiCredentials: types.ApiCredentials{
-				Username: creds[2],
-				Password: creds[3],
-			},
+			KeyPair: certString,
 			Address: addr,
 		}, nil
 	}
+	// basic auth
+	str, err := readParam(path, secretKeyName)
+	if err != nil {
+		return nil, err
+	}
+
+	creds := strings.SplitN(str, ":", csiCredentialFieldCount)
+	if len(creds) != csiCredentialFieldCount {
+		return nil, ErrMissingValue
+	}
+
+	addr, err := url.Parse("https://" + creds[0] + ":" + creds[1])
+	if err != nil {
+		return nil, &endpointParseError{cause: err}
+	}
+
+	return &types.ManagementEndpoint{
+		Username: creds[2],
+		Password: creds[csiPasswordIndex],
+		Address:  addr,
+	}, nil
 }

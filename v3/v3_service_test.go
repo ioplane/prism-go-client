@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -26,6 +27,7 @@ import (
 )
 
 func setup(t *testing.T) (*http.ServeMux, *internal.Client, *httptest.Server) {
+	t.Helper()
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 	creds := &prismgoclient.Credentials{
@@ -36,31 +38,35 @@ func setup(t *testing.T) (*http.ServeMux, *internal.Client, *httptest.Server) {
 		Endpoint: "0.0.0.0",
 		Insecure: true,
 	}
-	c, err := internal.NewClient(
+	client, err := internal.NewClient(
 		internal.WithCredentials(creds),
 		internal.WithUserAgent(userAgent),
 		internal.WithAbsolutePath(absolutePath),
 		internal.WithBaseURL(server.URL))
+	if err != nil {
+		server.Close()
+	}
+
 	require.NoError(t, err)
 
-	return mux, c, server
+	return mux, client, server
 }
 
 func TestOperations_CreateSubnet(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/subnets", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPost)
+	mux.HandleFunc("/api/nutanix/v3/subnets", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPost)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"kind": "subnet",
 			},
-			"spec": map[string]interface{}{
-				"cluster_reference": map[string]interface{}{
+			"spec": map[string]any{
+				"cluster_reference": map[string]any{
 					"kind": "cluster",
 					"uuid": "00056024-6c13-4c74-0000-00000000ecb5",
 				},
@@ -69,17 +75,20 @@ func TestOperations_CreateSubnet(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "subnet",
@@ -88,79 +97,49 @@ func TestOperations_CreateSubnet(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		createRequest *SubnetIntentInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *SubnetIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateSubnet",
-			fields{
-				c,
+	createRequest := &SubnetIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("subnet"),
+		},
+		Spec: &models.Subnet{
+			ClusterReference: &models.ClusterReference{
+				Kind: "cluster",
+				UUID: new("00056024-6c13-4c74-0000-00000000ecb5"),
 			},
-			args{
-				&SubnetIntentInput{
-					APIVersion: ptr.To("3.1"),
-					Metadata: &Metadata{
-						Kind: ptr.To("subnet"),
-					},
-					Spec: &models.Subnet{
-						ClusterReference: &models.ClusterReference{
-							Kind: "cluster",
-							UUID: ptr.To("00056024-6c13-4c74-0000-00000000ecb5"),
-						},
-						Name: ptr.To("subnet.create"),
-					},
-				},
-			},
-			&SubnetIntentResponse{
-				APIVersion: ptr.To("3.1"),
-				Metadata: &Metadata{
-					Kind: ptr.To("subnet"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+			Name: new("subnet.create"),
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateSubnet(context.Background(), tt.args.createRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateSubnet() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateSubnet() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &SubnetIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("subnet"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateSubnet", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateSubnet(context.Background(), createRequest)
+		testOperationResult(t, "CreateSubnet", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteSubnet(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/subnets/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -194,47 +173,46 @@ func TestOperations_DeleteSubnet(t *testing.T) {
 	}{
 		{
 			"Test DeleteSubnet OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			false,
 		},
 
 		{
 			"Test DeleteSubnet Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if _, err := op.DeleteSubnet(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteSubnet() error = %v, wantErr %v", err, tt.wantErr)
+			if _, err := op.DeleteSubnet(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteSubnet() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_UpdateSubnet(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/subnets/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPut)
+	mux.HandleFunc("/api/nutanix/v3/subnets/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPut)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"kind": "subnet",
 			},
-			"spec": map[string]interface{}{
-				"cluster_reference": map[string]interface{}{
+			"spec": map[string]any{
+				"cluster_reference": map[string]any{
 					"kind": "cluster",
 					"uuid": "00056024-6c13-4c74-0000-00000000ecb5",
 				},
@@ -243,17 +221,20 @@ func TestOperations_UpdateSubnet(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "subnet",
@@ -262,90 +243,59 @@ func TestOperations_UpdateSubnet(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *SubnetIntentInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *SubnetIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test UpdateSubnet",
-			fields{
-				c,
+	body := &SubnetIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("subnet"),
+		},
+		Spec: &models.Subnet{
+			ClusterReference: &models.ClusterReference{
+				Kind: "cluster",
+				UUID: new("00056024-6c13-4c74-0000-00000000ecb5"),
 			},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&SubnetIntentInput{
-					APIVersion: ptr.To("3.1"),
-					Metadata: &Metadata{
-						Kind: ptr.To("subnet"),
-					},
-					Spec: &models.Subnet{
-						ClusterReference: &models.ClusterReference{
-							Kind: "cluster",
-							UUID: ptr.To("00056024-6c13-4c74-0000-00000000ecb5"),
-						},
-						Name: ptr.To("subnet.create"),
-					},
-				},
-			},
-			&SubnetIntentResponse{
-				APIVersion: ptr.To("3.1"),
-				Metadata: &Metadata{
-					Kind: ptr.To("subnet"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+			Name: new("subnet.create"),
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.UpdateSubnet(context.Background(), tt.args.UUID, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.UpdateSubnet() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.UpdateSubnet() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &SubnetIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("subnet"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test UpdateSubnet", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateSubnet(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateSubnet", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateImage(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/images", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPost)
+	mux.HandleFunc("/api/nutanix/v3/images", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPost)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"kind": "image",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
 					"image_type": "DISK_IMAGE",
-					"data_source_reference": map[string]interface{}{
+					"data_source_reference": map[string]any{
 						"kind": "vm_disk",
 						"uuid": "0005a238-f165-08ba-317e-ac1f6b6e5442",
 					},
@@ -354,17 +304,20 @@ func TestOperations_CreateImage(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "image",
@@ -373,175 +326,128 @@ func TestOperations_CreateImage(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		body *ImageIntentInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ImageIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateImage",
-			fields{
-				c,
-			},
-			args{
-				&ImageIntentInput{
-					APIVersion: ptr.To("3.1"),
-					Metadata: &Metadata{
-						Kind: ptr.To("image"),
-					},
-					Spec: &Image{
-						Name: ptr.To("image.create"),
-						Resources: &ImageResources{
-							ImageType: ptr.To("DISK_IMAGE"),
-							DataSourceReference: &Reference{
-								Kind: ptr.To("vm_disk"),
-								UUID: ptr.To("0005a238-f165-08ba-317e-ac1f6b6e5442"),
-							},
-						},
-					},
+	body := &ImageIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("image"),
+		},
+		Spec: &Image{
+			Name: new("image.create"),
+			Resources: &ImageResources{
+				ImageType: new("DISK_IMAGE"),
+				DataSourceReference: &Reference{
+					Kind: new("vm_disk"),
+					UUID: new("0005a238-f165-08ba-317e-ac1f6b6e5442"),
 				},
 			},
-			&ImageIntentResponse{
-				APIVersion: ptr.To("3.1"),
-				Metadata: &Metadata{
-					Kind: ptr.To("image"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateImage(context.Background(), tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateImage() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateImage() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &ImageIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("image"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateImage", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateImage(context.Background(), body)
+		testOperationResult(t, "CreateImage", got, expected, err, false)
+	})
 }
 
 func TestOperations_UploadImageError(t *testing.T) {
-	_, c, server := setup(t)
+	_, client, server := setup(t)
 
 	defer server.Close()
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID     string
-		filepath string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		{
-			"Test UploadImage ERROR (Cannot Open File)",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc", "xx"},
-			true,
-		},
-	}
+	filepath := "xx"
 
-	for _, tt := range tests {
-		tt := tt
+	t.Run("Test UploadImage ERROR (Cannot Open File)", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+		err := op.UploadImage(context.Background(), uuid, filepath)
+		require.Error(t, err)
 
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			if err := op.UploadImage(context.Background(), tt.args.UUID, tt.args.filepath); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.UploadImage() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+		var pathErr *os.PathError
+		if assert.ErrorAs(t, err, &pathErr) {
+			assert.Equal(t, "error: cannot open file: "+pathErr.Error(), err.Error())
+		}
+
+		assert.ErrorIs(t, err, os.ErrNotExist)
+	})
+
+	t.Run("Test UploadImage ERROR (Creating Request)", func(t *testing.T) {
+		op := Operations{client: operationClient}
+		err := op.UploadImage(context.Background(), "%", "v3.go")
+		require.Error(t, err)
+		assert.Equal(t, "error: Creating request error parsing request URL", err.Error())
+
+		var urlErr *url.Error
+		assert.ErrorAs(t, err, &urlErr)
+	})
 }
 
 func TestOperations_UploadImage(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/images/cfde831a-4e87-4a75-960f-89b0148aa2cc/file", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nutanix/v3/images/cfde831a-4e87-4a75-960f-89b0148aa2cc/file", func(_ http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPut)
 
-		bodyBytes, _ := io.ReadAll(r.Body)
-		file, _ := os.ReadFile("v3.go")
+		bodyBytes, err := io.ReadAll(r.Body)
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		file, err := os.ReadFile("v3.go")
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		if !reflect.DeepEqual(bodyBytes, file) {
 			t.Errorf("Operations.UploadImage() error: different uploaded files")
 		}
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID     string
-		filepath string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		{
-			"TestOperations_UploadImage Upload Image",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc", "v3.go"},
-		},
-	}
+	filepath := "v3.go"
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			if err := op.UploadImage(context.Background(), tt.args.UUID, tt.args.filepath); err != nil {
-				t.Errorf("Operations.UploadImage() error = %v", err)
-			}
-		})
-	}
+	t.Run("TestOperations_UploadImage Upload Image", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+		if err := op.UploadImage(context.Background(), uuid, filepath); err != nil {
+			t.Errorf("Operations.UploadImage() error = %v", err)
+		}
+	})
 }
 
 func TestOperations_DeleteImage(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/images/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -575,186 +481,138 @@ func TestOperations_DeleteImage(t *testing.T) {
 	}{
 		{
 			"Test DeleteImage OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			false,
 		},
 
 		{
 			"Test DeleteImage Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if _, err := op.DeleteImage(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteImage() error = %v, wantErr %v", err, tt.wantErr)
+			if _, err := op.DeleteImage(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteImage() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_GetImage(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/images/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"image","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+
+		testFprint(t, w, `{"metadata": {"kind":"image","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	response := &ImageIntentResponse{}
 	response.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("image"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("image"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ImageIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test GetImage OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetImage(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetImage() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetImage() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetImage OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetImage(context.Background(), uuid)
+		testOperationResult(t, "GetImage", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListImage(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/images/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"image","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"image","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	list := &ImageListIntentResponse{}
 	list.Entities = make([]*ImageIntentResponse, 1)
 	list.Entities[0] = &ImageIntentResponse{}
 	list.Entities[0].Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("image"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("image"),
 	}
 
 	input := &DSMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ImageListIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test ListImage OK",
-			fields{c},
-			args{input},
-			list,
-			false,
-		},
-	}
+	expected := list
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListImage(context.Background(), tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListImage() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListImage() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test ListImage OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListImage(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListImage", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateImage(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/images/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPut)
+	mux.HandleFunc("/api/nutanix/v3/images/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPut)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"kind": "image",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
 					"image_type": "DISK_IMAGE",
 				},
 				"name": "image.update",
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "image",
@@ -763,220 +621,142 @@ func TestOperations_UpdateImage(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *ImageIntentInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ImageIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test UpdateVM",
-			fields{
-				c,
+	body := &ImageIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("image"),
+		},
+		Spec: &Image{
+			Resources: &ImageResources{
+				ImageType: new("DISK_IMAGE"),
 			},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&ImageIntentInput{
-					APIVersion: ptr.To("3.1"),
-					Metadata: &Metadata{
-						Kind: ptr.To("image"),
-					},
-					Spec: &Image{
-						Resources: &ImageResources{
-							ImageType: ptr.To("DISK_IMAGE"),
-						},
-						Name: ptr.To("image.update"),
-					},
-				},
-			},
-			&ImageIntentResponse{
-				APIVersion: ptr.To("3.1"),
-				Metadata: &Metadata{
-					Kind: ptr.To("image"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+			Name: new("image.update"),
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.UpdateImage(context.Background(), tt.args.UUID, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.UpdateImage() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.UpdateImage() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &ImageIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("image"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test UpdateVM", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateImage(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateImage", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateOrUpdateCategoryKey(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPut)
+	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPut)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"description": "Testing Keys",
 			"name":        "test_category_key",
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"description": "Testing Keys",
 			"name": "test_category_key",
 			"system_defined": false
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
+	operationClient := client
+
+	body := &CategoryKey{
+		Description: new("Testing Keys"),
+		Name:        new("test_category_key"),
 	}
 
-	type args struct {
-		body *CategoryKey
+	expected := &CategoryKeyStatus{
+		Description:   new("Testing Keys"),
+		Name:          new("test_category_key"),
+		SystemDefined: new(false),
 	}
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryKeyStatus
-		wantErr bool
-	}{
-		{
-			"Test CreateOrUpdateCaegoryKey OK",
-			fields{c},
-			args{&CategoryKey{
-				Description: ptr.To("Testing Keys"),
-				Name:        ptr.To("test_category_key"),
-			}},
-			&CategoryKeyStatus{
-				Description:   ptr.To("Testing Keys"),
-				Name:          ptr.To("test_category_key"),
-				SystemDefined: ptr.To(false),
-			},
-			false,
-		},
-	}
+	t.Run("Test CreateOrUpdateCaegoryKey OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateOrUpdateCategoryKey(context.Background(), tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateOrUpdateCategoryKey() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateOrUpdateCategoryKey() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+		got, err := op.CreateOrUpdateCategoryKey(context.Background(), body)
+		testOperationResult(t, "CreateOrUpdateCategoryKey", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListCategories(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/categories/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{ "description": "Testing Keys", "name": "test_category_key", "system_defined": false }]}`)
+
+		testFprint(t, w, `{"entities":[{ "description": "Testing Keys", "name": "test_category_key", "system_defined": false }]}`)
 	})
 
 	list := &CategoryKeyListResponse{}
 	list.Entities = make([]*CategoryKeyStatus, 1)
 	list.Entities[0] = &CategoryKeyStatus{
-		Description:   ptr.To("Testing Keys"),
-		Name:          ptr.To("test_category_key"),
-		SystemDefined: ptr.To(false),
+		Description:   new("Testing Keys"),
+		Name:          new("test_category_key"),
+		SystemDefined: new(false),
 	}
 
 	input := &CategoryListMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *CategoryListMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryKeyListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListCategoryKey OK",
-			fields{c},
-			args{input},
-			list,
-			false,
-		},
-	}
+	expected := list
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListCategories(context.Background(), tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListCategories() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListCategories() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test ListCategoryKey OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListCategories(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListCategories", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteCategoryKey(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key", func(_ http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 	})
 
@@ -996,40 +776,40 @@ func TestOperations_DeleteCategoryKey(t *testing.T) {
 	}{
 		{
 			"Test DeleteSubnet OK",
-			fields{c},
+			fields{client},
 			args{"test_category_key"},
 			false,
 		},
 
 		{
 			"Test SubnetVM Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if err := op.DeleteCategoryKey(context.Background(), tt.args.name); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteCategoryKey() error = %v, wantErr %v", err, tt.wantErr)
+			if err := op.DeleteCategoryKey(context.Background(), testCase.args.name); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteCategoryKey() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_GetCategoryKey(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{
+
+		testFprint(t, w, `{
 			"description": "Testing Keys",
 			"name": "test_category_key",
 			"system_defined": false
@@ -1037,142 +817,95 @@ func TestOperations_GetCategoryKey(t *testing.T) {
 	})
 
 	response := &CategoryKeyStatus{
-		Description:   ptr.To("Testing Keys"),
-		Name:          ptr.To("test_category_key"),
-		SystemDefined: ptr.To(false),
+		Description:   new("Testing Keys"),
+		Name:          new("test_category_key"),
+		SystemDefined: new(false),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		name string
-	}
+	name := "test_category_key"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryKeyStatus
-		wantErr bool
-	}{
-		{
-			"Test GetCategory OK",
-			fields{c},
-			args{"test_category_key"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetCategoryKey(context.Background(), tt.args.name)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetCategoryKey() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetCategoryKey() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetCategory OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetCategoryKey(context.Background(), name)
+		testOperationResult(t, "GetCategoryKey", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListCategoryValues(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{ "description": "Testing Keys", "value": "test_category_value", "system_defined": false }]}`)
+
+		testFprint(t, w, `{"entities":[{ "description": "Testing Keys", "value": "test_category_value", "system_defined": false }]}`)
 	})
 
 	list := &CategoryValueListResponse{}
 	list.Entities = make([]*CategoryValueStatus, 1)
 	list.Entities[0] = &CategoryValueStatus{
-		Description:   ptr.To("Testing Keys"),
-		Value:         ptr.To("test_category_value"),
-		SystemDefined: ptr.To(false),
+		Description:   new("Testing Keys"),
+		Value:         new("test_category_value"),
+		SystemDefined: new(false),
 	}
 
 	input := &CategoryListMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		name               string
-		getEntitiesRequest *CategoryListMetadata
-	}
+	name := "test_category_key"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryValueListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListCategoryKey OK",
-			fields{c},
-			args{"test_category_key", input},
-			list,
-			false,
-		},
-	}
+	getEntitiesRequest := input
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListCategoryValues(context.Background(), tt.args.name, tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListCategoryValues() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListCategoryValues() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	expected := list
+
+	t.Run("Test ListCategoryKey OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListCategoryValues(context.Background(), name, getEntitiesRequest)
+		testOperationResult(t, "ListCategoryValues", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateOrUpdateCategoryValue(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key/test_category_value", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPut)
+	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key/test_category_value", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPut)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"description": "Testing Value",
 			"value":       "test_category_value",
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"description": "Testing Value",
 			"name": "test_category_key",
 			"value": "test_category_value",
@@ -1180,65 +913,41 @@ func TestOperations_CreateOrUpdateCategoryValue(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
+	operationClient := client
+
+	name := "test_category_key"
+
+	body := &CategoryValue{
+		Description: new("Testing Value"),
+		Value:       new("test_category_value"),
 	}
 
-	type args struct {
-		name string
-		body *CategoryValue
+	expected := &CategoryValueStatus{
+		Description:   new("Testing Value"),
+		Value:         new("test_category_value"),
+		Name:          new("test_category_key"),
+		SystemDefined: new(false),
 	}
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryValueStatus
-		wantErr bool
-	}{
-		{
-			"Test CreateOrUpdateCategoryValue OK",
-			fields{c},
-			args{"test_category_key", &CategoryValue{
-				Description: ptr.To("Testing Value"),
-				Value:       ptr.To("test_category_value"),
-			}},
-			&CategoryValueStatus{
-				Description:   ptr.To("Testing Value"),
-				Value:         ptr.To("test_category_value"),
-				Name:          ptr.To("test_category_key"),
-				SystemDefined: ptr.To(false),
-			},
-			false,
-		},
-	}
+	t.Run("Test CreateOrUpdateCategoryValue OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateOrUpdateCategoryValue(context.Background(), tt.args.name, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateOrUpdateCategoryValue() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateOrUpdateCategoryValue() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+		got, err := op.CreateOrUpdateCategoryValue(context.Background(), name, body)
+		testOperationResult(t, "CreateOrUpdateCategoryValue", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetCategoryValue(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key/test_category_value", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{
+
+		testFprint(t, w, `{
 			"description": "Testing Value",
 			"name": "test_category_key",
 			"value": "test_category_value",
@@ -1247,61 +956,36 @@ func TestOperations_GetCategoryValue(t *testing.T) {
 	})
 
 	response := &CategoryValueStatus{
-		Description:   ptr.To("Testing Value"),
-		Name:          ptr.To("test_category_key"),
-		Value:         ptr.To("test_category_value"),
-		SystemDefined: ptr.To(false),
+		Description:   new("Testing Value"),
+		Name:          new("test_category_key"),
+		Value:         new("test_category_value"),
+		SystemDefined: new(false),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		name  string
-		value string
-	}
+	name := "test_category_key"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryValueStatus
-		wantErr bool
-	}{
-		{
-			"Test GetCategoryValue OK",
-			fields{c},
-			args{"test_category_key", "test_category_value"},
-			response,
-			false,
-		},
-	}
+	value := "test_category_value"
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetCategoryValue(context.Background(), tt.args.name, tt.args.value)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetCategoryValue() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetCategoryValue() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	expected := response
+
+	t.Run("Test GetCategoryValue OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetCategoryValue(context.Background(), name, value)
+		testOperationResult(t, "GetCategoryValue", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteCategoryValue(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key/test_category_value", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nutanix/v3/categories/test_category_key/test_category_value", func(_ http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 	})
 
@@ -1322,124 +1006,101 @@ func TestOperations_DeleteCategoryValue(t *testing.T) {
 	}{
 		{
 			"Test DeleteSubnet OK",
-			fields{c},
+			fields{client},
 			args{"test_category_key", "test_category_value"},
 			false,
 		},
 
 		{
 			"Test SubnetVM Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if err := op.DeleteCategoryValue(context.Background(), tt.args.name, tt.args.value); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteCategoryValue() error = %v, wantErr %v", err, tt.wantErr)
+			if err := op.DeleteCategoryValue(context.Background(), testCase.args.name, testCase.args.value); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteCategoryValue() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_GetCategoryQuery(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/category/query", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"results":[{ "kind": "category_result" }]}`)
+
+		testFprint(t, w, `{"results":[{ "kind": "category_result" }]}`)
 	})
 
 	response := &CategoryQueryResponse{}
 	response.Results = make([]*CategoryQueryResponseResults, 1)
 	response.Results[0] = &CategoryQueryResponseResults{
-		Kind: ptr.To("category_result"),
+		Kind: new("category_result"),
 	}
 
 	input := &CategoryQueryInput{
-		UsageType: ptr.To("APPLIED_TO"),
+		UsageType: new("APPLIED_TO"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		query *CategoryQueryInput
-	}
+	query := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *CategoryQueryResponse
-		wantErr bool
-	}{
-		{
-			"Test Category Query OK",
-			fields{c},
-			args{input},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetCategoryQuery(context.Background(), tt.args.query)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetCategoryQuery() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetCategoryQuery() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test Category Query OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetCategoryQuery(context.Background(), query)
+		testOperationResult(t, "GetCategoryQuery", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateNetworkSecurityRule(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/network_security_rules", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPost)
+	mux.HandleFunc("/api/nutanix/v3/network_security_rules", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPost)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"kind": "network_security_rule",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"description": "Network Create",
 				"name":        "network.create",
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "network_security_rule",
@@ -1448,70 +1109,40 @@ func TestOperations_CreateNetworkSecurityRule(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *NetworkSecurityRuleIntentInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *NetworkSecurityRuleIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateNetwork",
-			fields{
-				c,
-			},
-			args{
-				&NetworkSecurityRuleIntentInput{
-					APIVersion: ptr.To("3.1"),
-					Metadata: &Metadata{
-						Kind: ptr.To("network_security_rule"),
-					},
-					Spec: &NetworkSecurityRule{
-						Name:        ptr.To("network.create"),
-						Description: ptr.To("Network Create"),
-						Resources:   nil,
-					},
-				},
-			},
-			&NetworkSecurityRuleIntentResponse{
-				APIVersion: ptr.To("3.1"),
-				Metadata: &Metadata{
-					Kind: ptr.To("network_security_rule"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+	request := &NetworkSecurityRuleIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("network_security_rule"),
+		},
+		Spec: &NetworkSecurityRule{
+			Name:        new("network.create"),
+			Description: new("Network Create"),
+			Resources:   nil,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateNetworkSecurityRule(context.Background(), tt.args.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateNetworkSecurityRule() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateNetworkSecurityRule() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &NetworkSecurityRuleIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("network_security_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateNetwork", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateNetworkSecurityRule(context.Background(), request)
+		testOperationResult(t, "CreateNetworkSecurityRule", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteNetworkSecurityRule(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
@@ -1519,7 +1150,7 @@ func TestOperations_DeleteNetworkSecurityRule(t *testing.T) {
 		func(w http.ResponseWriter, r *http.Request) {
 			testHTTPMethod(t, r, http.MethodDelete)
 
-			_, _ = fmt.Fprintf(w, `{
+			testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -1553,186 +1184,138 @@ func TestOperations_DeleteNetworkSecurityRule(t *testing.T) {
 	}{
 		{
 			"Test DeleteNetwork OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			false,
 		},
 
 		{
 			"Test DeleteNetowork Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if _, err := op.DeleteNetworkSecurityRule(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteNetworkSecurityRule() error = %v, wantErr %v", err, tt.wantErr)
+			if _, err := op.DeleteNetworkSecurityRule(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteNetworkSecurityRule() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_GetNetworkSecurityRule(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/network_security_rules/cfde831a-4e87-4a75-960f-89b0148aa2cc",
 		func(w http.ResponseWriter, r *http.Request) {
 			testHTTPMethod(t, r, http.MethodGet)
-			_, _ = fmt.Fprint(w, `{"metadata": {"kind":"network_security_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+
+			testFprint(t, w, `{"metadata": {"kind":"network_security_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 		})
 
 	response := &NetworkSecurityRuleIntentResponse{}
 	response.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("network_security_rule"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("network_security_rule"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *NetworkSecurityRuleIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test GetNetworkSecurityRule OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetNetworkSecurityRule(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetNetworkSecurityRule() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetNetworkSecurityRule() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetNetworkSecurityRule OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetNetworkSecurityRule(context.Background(), uuid)
+		testOperationResult(t, "GetNetworkSecurityRule", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListNetworkSecurityRule(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/network_security_rules/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"network_security_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"network_security_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	list := &NetworkSecurityRuleListIntentResponse{}
 	list.Entities = make([]*NetworkSecurityRuleIntentResource, 1)
 	list.Entities[0] = &NetworkSecurityRuleIntentResource{}
 	list.Entities[0].Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("network_security_rule"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("network_security_rule"),
 	}
 
 	input := &DSMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *NetworkSecurityRuleListIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test ListNetwork OK",
-			fields{c},
-			args{input},
-			list,
-			false,
-		},
-	}
+	expected := list
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListNetworkSecurityRule(context.Background(), tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListNetworkSecurityRule() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListNetworkSecurityRule() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test ListNetwork OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListNetworkSecurityRule(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListNetworkSecurityRule", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateNetworkSecurityRule(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/network_security_rules/cfde831a-4e87-4a75-960f-89b0148aa2cc",
-		func(w http.ResponseWriter, r *http.Request) {
-			testHTTPMethod(t, r, http.MethodPut)
+		func(writer http.ResponseWriter, request *http.Request) {
+			testHTTPMethod(t, request, http.MethodPut)
 
-			expected := map[string]interface{}{
+			expected := map[string]any{
 				"api_version": "3.1",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"kind": "network_security_rule",
 				},
-				"spec": map[string]interface{}{
+				"spec": map[string]any{
 					"description": "Network Update",
 					"name":        "network.update",
 				},
 			}
 
-			var v map[string]interface{}
-			err := json.NewDecoder(r.Body).Decode(&v)
+			var actual map[string]any
+
+			err := json.NewDecoder(request.Body).Decode(&actual)
 			if err != nil {
-				t.Fatalf("decode json: %v", err)
+				t.Errorf("decode json: %v", err)
+
+				return
 			}
 
-			if !reflect.DeepEqual(v, expected) {
-				t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+			if !reflect.DeepEqual(actual, expected) {
+				t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 			}
 
-			_, _ = fmt.Fprintf(w, `{
+			testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "network_security_rule",
@@ -1741,102 +1324,75 @@ func TestOperations_UpdateNetworkSecurityRule(t *testing.T) {
 		}`)
 		})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *NetworkSecurityRuleIntentInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *NetworkSecurityRuleIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test UpdateNetwork",
-			fields{
-				c,
-			},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&NetworkSecurityRuleIntentInput{
-					APIVersion: ptr.To("3.1"),
-					Metadata: &Metadata{
-						Kind: ptr.To("network_security_rule"),
-					},
-					Spec: &NetworkSecurityRule{
-						Resources:   nil,
-						Description: ptr.To("Network Update"),
-						Name:        ptr.To("network.update"),
-					},
-				},
-			},
-			&NetworkSecurityRuleIntentResponse{
-				APIVersion: ptr.To("3.1"),
-				Metadata: &Metadata{
-					Kind: ptr.To("network_security_rule"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+	body := &NetworkSecurityRuleIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("network_security_rule"),
+		},
+		Spec: &NetworkSecurityRule{
+			Resources:   nil,
+			Description: new("Network Update"),
+			Name:        new("network.update"),
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.UpdateNetworkSecurityRule(context.Background(), tt.args.UUID, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.UpdateNetworkSecurityRule() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.UpdateNetworkSecurityRule() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &NetworkSecurityRuleIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("network_security_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test UpdateNetwork", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateNetworkSecurityRule(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateNetworkSecurityRule", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateVolumeGroup(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/volume_groups", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPost)
+	mux.HandleFunc("/api/nutanix/v3/volume_groups", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPost)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"kind": "volume_group",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
 					"flash_mode": "ON",
 				},
 				"name": "volume.create",
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "volume_group",
@@ -1845,73 +1401,45 @@ func TestOperations_CreateVolumeGroup(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *VolumeGroupInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *VolumeGroupResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateVolumeGroup",
-			fields{c},
-			args{
-				&VolumeGroupInput{
-					APIVersion: ptr.To("3.1"),
-					Metadata: &Metadata{
-						Kind: ptr.To("volume_group"),
-					},
-					Spec: &VolumeGroup{
-						Name: ptr.To("volume.create"),
-						Resources: &VolumeGroupResources{
-							FlashMode: ptr.To("ON"),
-						},
-					},
-				},
+	request := &VolumeGroupInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("volume_group"),
+		},
+		Spec: &VolumeGroup{
+			Name: new("volume.create"),
+			Resources: &VolumeGroupResources{
+				FlashMode: new("ON"),
 			},
-			&VolumeGroupResponse{
-				APIVersion: ptr.To("3.1"),
-				Metadata: &Metadata{
-					Kind: ptr.To("volume_group"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateVolumeGroup(context.Background(), tt.args.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateVolumeGroup() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateVolumeGroup() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &VolumeGroupResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("volume_group"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateVolumeGroup", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateVolumeGroup(context.Background(), request)
+		testOperationResult(t, "CreateVolumeGroup", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteVolumeGroup(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/volume_groups/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nutanix/v3/volume_groups/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(_ http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 	})
 
@@ -1931,186 +1459,138 @@ func TestOperations_DeleteVolumeGroup(t *testing.T) {
 	}{
 		{
 			"Test DeleteVolumeGroup OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			false,
 		},
 
 		{
 			"Test DeleteVolumeGroup Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if err := op.DeleteVolumeGroup(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteVolumeGroup() error = %v, wantErr %v", err, tt.wantErr)
+			if err := op.DeleteVolumeGroup(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteVolumeGroup() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_GetVolumeGroup(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/volume_groups/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"volume_group","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+
+		testFprint(t, w, `{"metadata": {"kind":"volume_group","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	response := &VolumeGroupResponse{}
 	response.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("volume_group"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("volume_group"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *VolumeGroupResponse
-		wantErr bool
-	}{
-		{
-			"Test GetVolumeGroup OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetVolumeGroup(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetVolumeGroup() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetVolumeGroup() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetVolumeGroup OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetVolumeGroup(context.Background(), uuid)
+		testOperationResult(t, "GetVolumeGroup", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListVolumeGroup(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/volume_groups/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"volume_group","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"volume_group","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	list := &VolumeGroupListResponse{}
 	list.Entities = make([]*VolumeGroupResponse, 1)
 	list.Entities[0] = &VolumeGroupResponse{}
 	list.Entities[0].Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("volume_group"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("volume_group"),
 	}
 
 	input := &DSMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *VolumeGroupListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListVolumeGroup OK",
-			fields{c},
-			args{input},
-			list,
-			false,
-		},
-	}
+	expected := list
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListVolumeGroup(context.Background(), tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListVolumeGroup() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListVolumeGroup() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test ListVolumeGroup OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListVolumeGroup(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListVolumeGroup", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateVolumeGroup(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/volume_groups/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPut)
+	mux.HandleFunc("/api/nutanix/v3/volume_groups/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPut)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"kind": "volume_group",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
 					"flash_mode": "ON",
 				},
 				"name": "volume.update",
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "volume_group",
@@ -2119,67 +1599,39 @@ func TestOperations_UpdateVolumeGroup(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *VolumeGroupInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *VolumeGroupResponse
-		wantErr bool
-	}{
-		{
-			"Test UpdateVolumeGroup",
-			fields{c},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&VolumeGroupInput{
-					APIVersion: ptr.To("3.1"),
-					Metadata: &Metadata{
-						Kind: ptr.To("volume_group"),
-					},
-					Spec: &VolumeGroup{
-						Resources: &VolumeGroupResources{
-							FlashMode: ptr.To("ON"),
-						},
-						Name: ptr.To("volume.update"),
-					},
-				},
+	body := &VolumeGroupInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("volume_group"),
+		},
+		Spec: &VolumeGroup{
+			Resources: &VolumeGroupResources{
+				FlashMode: new("ON"),
 			},
-			&VolumeGroupResponse{
-				APIVersion: ptr.To("3.1"),
-				Metadata: &Metadata{
-					Kind: ptr.To("volume_group"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
+			Name: new("volume.update"),
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.UpdateVolumeGroup(context.Background(), tt.args.UUID, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.UpdateVolumeGroup() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.UpdateVolumeGroup() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &VolumeGroupResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("volume_group"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test UpdateVolumeGroup", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateVolumeGroup(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateVolumeGroup", got, expected, err, false)
+	})
 }
 
 func testHTTPMethod(t *testing.T, r *http.Request, expected string) {
@@ -2189,147 +1641,97 @@ func testHTTPMethod(t *testing.T, r *http.Request, expected string) {
 }
 
 func TestOperations_GetHost(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/hosts/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+
+		testFprint(t, w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	hostResponse := &HostResponse{}
 	hostResponse.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("host"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("host"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *HostResponse
-		wantErr bool
-	}{
-		{
-			"Test GetHost OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			hostResponse,
-			false,
-		},
-	}
+	expected := hostResponse
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetHost(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetHost() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetHost() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetHost OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetHost(context.Background(), uuid)
+		testOperationResult(t, "GetHost", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListHost(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/hosts/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	hostList := &HostListResponse{}
 	hostList.Entities = make([]*HostResponse, 1)
 	hostList.Entities[0] = &HostResponse{}
 	hostList.Entities[0].Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("host"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("host"),
 	}
 
 	input := &DSMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *HostListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListSubnet OK",
-			fields{c},
-			args{input},
-			hostList,
-			false,
-		},
-	}
+	expected := hostList
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListHost(context.Background(), tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListHost() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListHost() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test ListSubnet OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListHost(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListHost", got, expected, err, false)
+	})
 }
 
 func TestOperations_CreateProject(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/projects", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPost)
+	mux.HandleFunc("/api/nutanix/v3/projects", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPost)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "project_test_name",
 				"kind": "project",
 				"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
-					"resource_domain": map[string]interface{}{
-						"resources": []interface{}{
-							map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
+					"resource_domain": map[string]any{
+						"resources": []any{
+							map[string]any{
 								"limit":         float64(4),
 								"resource_type": "resource_type_test",
 							},
@@ -2341,17 +1743,20 @@ func TestOperations_CreateProject(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "project",
@@ -2360,218 +1765,140 @@ func TestOperations_CreateProject(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *Project
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Project
-		wantErr bool
-	}{
-		{
-			"Test CreateProject",
-			fields{c},
-			args{
-				&Project{
-					APIVersion: "3.1",
-					Metadata: &Metadata{
-						Name: ptr.To("project_test_name"),
-						Kind: ptr.To("project"),
-						UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &ProjectSpec{
-						Name:       "project_name",
-						Descripion: "description_test",
-						Resources: &ProjectResources{
-							ResourceDomain: &ResourceDomain{
-								Resources: []*Resources{
-									{
-										Limit:        ptr.To(int64(4)),
-										ResourceType: "resource_type_test",
-									},
-								},
-							},
+	request := &Project{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Name: new("project_test_name"),
+			Kind: new("project"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &ProjectSpec{
+			Name:       "project_name",
+			Descripion: "description_test",
+			Resources: &ProjectResources{
+				ResourceDomain: &ResourceDomain{
+					Resources: []*Resources{
+						{
+							Limit:        new(int64(4)),
+							ResourceType: "resource_type_test",
 						},
 					},
 				},
 			},
-			&Project{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: ptr.To("project"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateProject(context.Background(), tt.args.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateProject() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateProject() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &Project{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("project"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateProject", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateProject(context.Background(), request)
+		testOperationResult(t, "CreateProject", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetProject(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/projects/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+
+		testFprint(t, w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	hostResponse := &Project{}
 	hostResponse.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("host"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("host"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Project
-		wantErr bool
-	}{
-		{
-			"Test GetProject OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			hostResponse,
-			false,
-		},
-	}
+	expected := hostResponse
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetProject(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetProject() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetProject() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetProject OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetProject(context.Background(), uuid)
+		testOperationResult(t, "GetProject", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListProject(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/projects/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	hostList := &ProjectListResponse{}
 	hostList.Entities = make([]*Project, 1)
 	hostList.Entities[0] = &Project{}
 	hostList.Entities[0].Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("host"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("host"),
 	}
 
 	input := &DSMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ProjectListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListSubnet OK",
-			fields{c},
-			args{input},
-			hostList,
-			false,
-		},
-	}
+	expected := hostList
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListProject(context.Background(), tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListProject() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListProject() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test ListSubnet OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListProject(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListProject", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateProject(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/projects/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPut)
+	mux.HandleFunc("/api/nutanix/v3/projects/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPut)
 
-		expected := map[string]interface{}{
-			"metadata": map[string]interface{}{
+		expected := map[string]any{
+			"metadata": map[string]any{
 				"name": "project_test_name",
 				"kind": "project",
 				"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
-					"resource_domain": map[string]interface{}{
-						"resources": []interface{}{
-							map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
+					"resource_domain": map[string]any{
+						"resources": []any{
+							map[string]any{
 								"limit":         float64(4),
 								"resource_type": "resource_type_test",
 							},
@@ -2583,17 +1910,20 @@ func TestOperations_UpdateProject(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "project",
@@ -2602,87 +1932,59 @@ func TestOperations_UpdateProject(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *Project
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Project
-		wantErr bool
-	}{
-		{
-			"Test CreateProject",
-			fields{c},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&Project{
-					Metadata: &Metadata{
-						Name: ptr.To("project_test_name"),
-						Kind: ptr.To("project"),
-						UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &ProjectSpec{
-						Name:       "project_name",
-						Descripion: "description_test",
-						Resources: &ProjectResources{
-							ResourceDomain: &ResourceDomain{
-								Resources: []*Resources{
-									{
-										Limit:        ptr.To(int64(4)),
-										ResourceType: "resource_type_test",
-									},
-								},
-							},
+	body := &Project{
+		Metadata: &Metadata{
+			Name: new("project_test_name"),
+			Kind: new("project"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &ProjectSpec{
+			Name:       "project_name",
+			Descripion: "description_test",
+			Resources: &ProjectResources{
+				ResourceDomain: &ResourceDomain{
+					Resources: []*Resources{
+						{
+							Limit:        new(int64(4)),
+							ResourceType: "resource_type_test",
 						},
 					},
 				},
 			},
-			&Project{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: ptr.To("project"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.UpdateProject(context.Background(), tt.args.UUID, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.UpdateProject() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.UpdateProject() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &Project{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("project"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateProject", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateProject(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateProject", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteProject(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/projects/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -2716,50 +2018,49 @@ func TestOperations_DeleteProject(t *testing.T) {
 	}{
 		{
 			"Test DeleteProject OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			false,
 		},
 
 		{
 			"Test DeleteProject Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if _, err := op.DeleteProject(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteProject() error = %v, wantErr %v", err, tt.wantErr)
+			if _, err := op.DeleteProject(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteProject() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_CreateAccessControlPolicy(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/access_control_policies", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPost)
+	mux.HandleFunc("/api/nutanix/v3/access_control_policies", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPost)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "access_control_policy_test_name",
 				"kind": "access_control_policy",
 				"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
-					"role_reference": map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
+					"role_reference": map[string]any{
 						"name": "access_control_policy_test_name",
 						"kind": "role",
 						"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
@@ -2770,17 +2071,20 @@ func TestOperations_CreateAccessControlPolicy(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "access_control_policy",
@@ -2789,213 +2093,135 @@ func TestOperations_CreateAccessControlPolicy(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *AccessControlPolicy
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *AccessControlPolicy
-		wantErr bool
-	}{
-		{
-			"Test CreateAccessControlPolicy",
-			fields{c},
-			args{
-				&AccessControlPolicy{
-					APIVersion: "3.1",
-					Metadata: &Metadata{
-						Name: ptr.To("access_control_policy_test_name"),
-						Kind: ptr.To("access_control_policy"),
-						UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &AccessControlPolicySpec{
-						Name:        ptr.To("access_control_policy_name"),
-						Description: ptr.To("description_test"),
-						Resources: &AccessControlPolicyResources{
-							RoleReference: &Reference{
-								Kind: ptr.To("role"),
-								UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-								Name: ptr.To("access_control_policy_test_name"),
-							},
-						},
-					},
+	request := &AccessControlPolicy{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Name: new("access_control_policy_test_name"),
+			Kind: new("access_control_policy"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &AccessControlPolicySpec{
+			Name:        new("access_control_policy_name"),
+			Description: new("description_test"),
+			Resources: &AccessControlPolicyResources{
+				RoleReference: &Reference{
+					Kind: new("role"),
+					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+					Name: new("access_control_policy_test_name"),
 				},
 			},
-			&AccessControlPolicy{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: ptr.To("access_control_policy"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateAccessControlPolicy(context.Background(), tt.args.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateAccessControlPolicy() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateAccessControlPolicy() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &AccessControlPolicy{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("access_control_policy"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateAccessControlPolicy", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateAccessControlPolicy(context.Background(), request)
+		testOperationResult(t, "CreateAccessControlPolicy", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetAccessControlPolicy(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/access_control_policies/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+
+		testFprint(t, w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	hostResponse := &AccessControlPolicy{}
 	hostResponse.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("host"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("host"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *AccessControlPolicy
-		wantErr bool
-	}{
-		{
-			"Test GetAccessControlPolicy OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			hostResponse,
-			false,
-		},
-	}
+	expected := hostResponse
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetAccessControlPolicy(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetAccessControlPolicy() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetAccessControlPolicy() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetAccessControlPolicy OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetAccessControlPolicy(context.Background(), uuid)
+		testOperationResult(t, "GetAccessControlPolicy", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListAccessControlPolicy(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/access_control_policies/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	hostList := &AccessControlPolicyListResponse{}
 	hostList.Entities = make([]*AccessControlPolicy, 1)
 	hostList.Entities[0] = &AccessControlPolicy{}
 	hostList.Entities[0].Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("host"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("host"),
 	}
 
 	input := &DSMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *AccessControlPolicyListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListSubnet OK",
-			fields{c},
-			args{input},
-			hostList,
-			false,
-		},
-	}
+	expected := hostList
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListAccessControlPolicy(context.Background(), tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListAccessControlPolicy() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListAccessControlPolicy() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test ListSubnet OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListAccessControlPolicy(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListAccessControlPolicy", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateAccessControlPolicy(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/access_control_policies/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPut)
+	mux.HandleFunc("/api/nutanix/v3/access_control_policies/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPut)
 
-		expected := map[string]interface{}{
-			"metadata": map[string]interface{}{
+		expected := map[string]any{
+			"metadata": map[string]any{
 				"name": "access_control_policy_test_name",
 				"kind": "access_control_policy",
 				"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
-					"role_reference": map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
+					"role_reference": map[string]any{
 						"name": "access_control_policy_test_name_2",
 						"kind": "role",
 						"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
@@ -3006,17 +2232,20 @@ func TestOperations_UpdateAccessControlPolicy(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "access_control_policy",
@@ -3025,84 +2254,56 @@ func TestOperations_UpdateAccessControlPolicy(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *AccessControlPolicy
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *AccessControlPolicy
-		wantErr bool
-	}{
-		{
-			"Test CreateAccessControlPolicy",
-			fields{c},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&AccessControlPolicy{
-					Metadata: &Metadata{
-						Name: ptr.To("access_control_policy_test_name"),
-						Kind: ptr.To("access_control_policy"),
-						UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &AccessControlPolicySpec{
-						Name:        ptr.To("access_control_policy_name"),
-						Description: ptr.To("description_test"),
-						Resources: &AccessControlPolicyResources{
-							RoleReference: &Reference{
-								Kind: ptr.To("role"),
-								UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-								Name: ptr.To("access_control_policy_test_name_2"),
-							},
-						},
-					},
+	body := &AccessControlPolicy{
+		Metadata: &Metadata{
+			Name: new("access_control_policy_test_name"),
+			Kind: new("access_control_policy"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &AccessControlPolicySpec{
+			Name:        new("access_control_policy_name"),
+			Description: new("description_test"),
+			Resources: &AccessControlPolicyResources{
+				RoleReference: &Reference{
+					Kind: new("role"),
+					UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+					Name: new("access_control_policy_test_name_2"),
 				},
 			},
-			&AccessControlPolicy{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: ptr.To("access_control_policy"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.UpdateAccessControlPolicy(context.Background(), tt.args.UUID, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.UpdateAccessControlPolicy() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.UpdateAccessControlPolicy() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &AccessControlPolicy{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("access_control_policy"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateAccessControlPolicy", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateAccessControlPolicy(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateAccessControlPolicy", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteAccessControlPolicy(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/access_control_policies/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -3136,51 +2337,50 @@ func TestOperations_DeleteAccessControlPolicy(t *testing.T) {
 	}{
 		{
 			"Test DeleteAccessControlPolicy OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			false,
 		},
 
 		{
 			"Test DeleteAccessControlPolicy Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if _, err := op.DeleteAccessControlPolicy(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteAccessControlPolicy() error = %v, wantErr %v", err, tt.wantErr)
+			if _, err := op.DeleteAccessControlPolicy(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteAccessControlPolicy() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_CreateRole(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/roles", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPost)
+	mux.HandleFunc("/api/nutanix/v3/roles", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPost)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "role_test_name",
 				"kind": "role",
 				"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
-					"permission_reference_list": []interface{}{
-						map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
+					"permission_reference_list": []any{
+						map[string]any{
 							"name": "role_test_name",
 							"kind": "role",
 							"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
@@ -3192,17 +2392,20 @@ func TestOperations_CreateRole(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "role",
@@ -3211,216 +2414,138 @@ func TestOperations_CreateRole(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *Role
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Role
-		wantErr bool
-	}{
-		{
-			"Test CreateRole",
-			fields{c},
-			args{
-				&Role{
-					APIVersion: "3.1",
-					Metadata: &Metadata{
-						Name: ptr.To("role_test_name"),
-						Kind: ptr.To("role"),
-						UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &RoleSpec{
-						Name:        ptr.To("role_name"),
-						Description: ptr.To("description_test"),
-						Resources: &RoleResources{
-							PermissionReferenceList: []*Reference{
-								{
-									Kind: ptr.To("role"),
-									UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-									Name: ptr.To("role_test_name"),
-								},
-							},
-						},
+	request := &Role{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Name: new("role_test_name"),
+			Kind: new("role"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &RoleSpec{
+			Name:        new("role_name"),
+			Description: new("description_test"),
+			Resources: &RoleResources{
+				PermissionReferenceList: []*Reference{
+					{
+						Kind: new("role"),
+						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+						Name: new("role_test_name"),
 					},
 				},
 			},
-			&Role{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: ptr.To("role"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateRole(context.Background(), tt.args.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateRole() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateRole() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &Role{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("role"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateRole", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateRole(context.Background(), request)
+		testOperationResult(t, "CreateRole", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetRole(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/roles/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+
+		testFprint(t, w, `{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	hostResponse := &Role{}
 	hostResponse.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("host"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("host"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Role
-		wantErr bool
-	}{
-		{
-			"Test GetRole OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			hostResponse,
-			false,
-		},
-	}
+	expected := hostResponse
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetRole(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetRole() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetRole() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetRole OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetRole(context.Background(), uuid)
+		testOperationResult(t, "GetRole", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListRole(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/roles/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"host","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	hostList := &RoleListResponse{}
 	hostList.Entities = make([]*Role, 1)
 	hostList.Entities[0] = &Role{}
 	hostList.Entities[0].Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("host"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("host"),
 	}
 
 	input := &DSMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *RoleListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListSubnet OK",
-			fields{c},
-			args{input},
-			hostList,
-			false,
-		},
-	}
+	expected := hostList
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListRole(context.Background(), tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListRole() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListRole() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test ListSubnet OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListRole(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListRole", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateRole(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/roles/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPut)
+	mux.HandleFunc("/api/nutanix/v3/roles/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPut)
 
-		expected := map[string]interface{}{
-			"metadata": map[string]interface{}{
+		expected := map[string]any{
+			"metadata": map[string]any{
 				"name": "role_test_name",
 				"kind": "role",
 				"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
-					"permission_reference_list": []interface{}{
-						map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
+					"permission_reference_list": []any{
+						map[string]any{
 							"name": "role_test_name",
 							"kind": "role",
 							"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
@@ -3432,17 +2557,20 @@ func TestOperations_UpdateRole(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "role",
@@ -3451,86 +2579,58 @@ func TestOperations_UpdateRole(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *Role
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *Role
-		wantErr bool
-	}{
-		{
-			"Test CreateRole",
-			fields{c},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&Role{
-					Metadata: &Metadata{
-						Name: ptr.To("role_test_name"),
-						Kind: ptr.To("role"),
-						UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-					},
-					Spec: &RoleSpec{
-						Name:        ptr.To("role_name"),
-						Description: ptr.To("description_test"),
-						Resources: &RoleResources{
-							PermissionReferenceList: []*Reference{
-								{
-									Kind: ptr.To("role"),
-									UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-									Name: ptr.To("role_test_name"),
-								},
-							},
-						},
+	body := &Role{
+		Metadata: &Metadata{
+			Name: new("role_test_name"),
+			Kind: new("role"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &RoleSpec{
+			Name:        new("role_name"),
+			Description: new("description_test"),
+			Resources: &RoleResources{
+				PermissionReferenceList: []*Reference{
+					{
+						Kind: new("role"),
+						UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+						Name: new("role_test_name"),
 					},
 				},
 			},
-			&Role{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: ptr.To("role"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.UpdateRole(context.Background(), tt.args.UUID, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.UpdateRole() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.UpdateRole() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &Role{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("role"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateRole", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateRole(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateRole", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteRole(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/roles/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -3564,51 +2664,50 @@ func TestOperations_DeleteRole(t *testing.T) {
 	}{
 		{
 			"Test DeleteRole OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			false,
 		},
 
 		{
 			"Test DeleteRole Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if _, err := op.DeleteRole(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteRole() error = %v, wantErr %v", err, tt.wantErr)
+			if _, err := op.DeleteRole(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteRole() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_CreateUser(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/users", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPost)
+	mux.HandleFunc("/api/nutanix/v3/users", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPost)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "user_name",
 				"kind": "user",
 				"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
-					"directory_service_user": map[string]interface{}{
-						"directory_service_reference": map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
+					"directory_service_user": map[string]any{
+						"directory_service_reference": map[string]any{
 							"kind": "directory_service",
 							"uuid": "d8b53470-c432-4556-badd-a11c937d89c9",
 						},
@@ -3618,17 +2717,20 @@ func TestOperations_CreateUser(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "user",
@@ -3637,215 +2739,137 @@ func TestOperations_CreateUser(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *UserIntentInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *UserIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateUser",
-			fields{c},
-			args{
-				&UserIntentInput{
-					APIVersion: ptr.To("3.1"),
-					Metadata: &Metadata{
-						Name: ptr.To("user_name"),
-						Kind: ptr.To("user"),
-						UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+	request := &UserIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Name: new("user_name"),
+			Kind: new("user"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &UserSpec{
+			Resources: &UserResources{
+				DirectoryServiceUser: &DirectoryServiceUser{
+					DirectoryServiceReference: &Reference{
+						Kind: new("directory_service"),
+						UUID: new("d8b53470-c432-4556-badd-a11c937d89c9"),
 					},
-					Spec: &UserSpec{
-						Resources: &UserResources{
-							DirectoryServiceUser: &DirectoryServiceUser{
-								DirectoryServiceReference: &Reference{
-									Kind: ptr.To("directory_service"),
-									UUID: ptr.To("d8b53470-c432-4556-badd-a11c937d89c9"),
-								},
-								UserPrincipalName: ptr.To("user-dummy-tbd@ntnx.local"),
-							},
-						},
-					},
+					UserPrincipalName: new("user-dummy-tbd@ntnx.local"),
 				},
 			},
-			&UserIntentResponse{
-				APIVersion: ptr.To("3.1"),
-				Metadata: &Metadata{
-					Kind: ptr.To("user"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateUser(context.Background(), tt.args.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateUser() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateUser() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &UserIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("user"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateUser", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateUser(context.Background(), request)
+		testOperationResult(t, "CreateUser", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetUser(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/users/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"user","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+
+		testFprint(t, w, `{"metadata": {"kind":"user","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	hostResponse := &UserIntentResponse{}
 	hostResponse.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("user"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("user"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *UserIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test GetUser OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			hostResponse,
-			false,
-		},
-	}
+	expected := hostResponse
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetUser(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetUser() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetUser() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetUser OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetUser(context.Background(), uuid)
+		testOperationResult(t, "GetUser", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListUser(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/users/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"user","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"user","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	hostList := &UserListResponse{}
 	hostList.Entities = make([]*UserIntentResponse, 1)
 	hostList.Entities[0] = &UserIntentResponse{}
 	hostList.Entities[0].Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("user"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("user"),
 	}
 
 	input := &DSMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *UserListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListUser OK",
-			fields{c},
-			args{input},
-			hostList,
-			false,
-		},
-	}
+	expected := hostList
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListUser(context.Background(), tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListUser() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListUser() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test ListUser OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListUser(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListUser", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateUser(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/users/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPut)
+	mux.HandleFunc("/api/nutanix/v3/users/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPut)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "user_name",
 				"kind": "user",
 				"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
-					"directory_service_user": map[string]interface{}{
-						"directory_service_reference": map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
+					"directory_service_user": map[string]any{
+						"directory_service_reference": map[string]any{
 							"kind": "directory_service",
 							"uuid": "d8b53470-c432-4556-badd-a11c937d89c9",
 						},
@@ -3855,17 +2879,20 @@ func TestOperations_UpdateUser(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "user",
@@ -3874,85 +2901,57 @@ func TestOperations_UpdateUser(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *UserIntentInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *UserIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateUser",
-			fields{c},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&UserIntentInput{
-					APIVersion: ptr.To("3.1"),
-					Metadata: &Metadata{
-						Name: ptr.To("user_name"),
-						Kind: ptr.To("user"),
-						UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+	body := &UserIntentInput{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Name: new("user_name"),
+			Kind: new("user"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &UserSpec{
+			Resources: &UserResources{
+				DirectoryServiceUser: &DirectoryServiceUser{
+					DirectoryServiceReference: &Reference{
+						Kind: new("directory_service"),
+						UUID: new("d8b53470-c432-4556-badd-a11c937d89c9"),
 					},
-					Spec: &UserSpec{
-						Resources: &UserResources{
-							DirectoryServiceUser: &DirectoryServiceUser{
-								DirectoryServiceReference: &Reference{
-									Kind: ptr.To("directory_service"),
-									UUID: ptr.To("d8b53470-c432-4556-badd-a11c937d89c9"),
-								},
-								UserPrincipalName: ptr.To("user-dummy-tbd@ntnx.local"),
-							},
-						},
-					},
+					UserPrincipalName: new("user-dummy-tbd@ntnx.local"),
 				},
 			},
-			&UserIntentResponse{
-				APIVersion: ptr.To("3.1"),
-				Metadata: &Metadata{
-					Kind: ptr.To("user"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-				},
-			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.UpdateUser(context.Background(), tt.args.UUID, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.UpdateUser() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.UpdateUser() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &UserIntentResponse{
+		APIVersion: new("3.1"),
+		Metadata: &Metadata{
+			Kind: new("user"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateUser", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateUser(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateUser", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteUser(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/users/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, w, `{
 				"status": {
 					"state": "DELETE_PENDING",
 					"execution_context": {
@@ -3986,75 +2985,74 @@ func TestOperations_DeleteUser(t *testing.T) {
 	}{
 		{
 			"Test DeleteUser OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			false,
 		},
 
 		{
 			"Test DeleteUser Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if _, err := op.DeleteUser(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteUser() error = %v, wantErr %v", err, tt.wantErr)
+			if _, err := op.DeleteUser(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteUser() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_CreateProtectionRule(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/protection_rules", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPost)
+	mux.HandleFunc("/api/nutanix/v3/protection_rules", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPost)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "protection_rule_test_name",
 				"kind": "protection_rule",
 				"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
 					"start_time": "00h:00m",
-					"ordered_availability_zone_list": []interface{}{
-						map[string]interface{}{
+					"ordered_availability_zone_list": []any{
+						map[string]any{
 							"availability_zone_url": "url test",
 							"cluster_uuid":          "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 						},
 					},
-					"availability_zone_connectivity_list": []interface{}{
-						map[string]interface{}{
+					"availability_zone_connectivity_list": []any{
+						map[string]any{
 							"destination_availability_zone_index": float64(0),
 							"source_availability_zone_index":      float64(0),
-							"snapshot_schedule_list": []interface{}{
-								map[string]interface{}{
+							"snapshot_schedule_list": []any{
+								map[string]any{
 									"recovery_point_objective_secs": float64(0),
 									"auto_suspend_timeout_secs":     float64(0),
 									"snapshot_type":                 "CRASH_CONSISTENT",
-									"local_snapshot_retention_policy": map[string]interface{}{
+									"local_snapshot_retention_policy": map[string]any{
 										"num_snapshots": float64(1),
-										"rollup_retention_policy": map[string]interface{}{
+										"rollup_retention_policy": map[string]any{
 											"snapshot_interval_type": "HOURLY",
 											"multiple":               float64(1),
 										},
 									},
-									"remote_snapshot_retention_policy": map[string]interface{}{
+									"remote_snapshot_retention_policy": map[string]any{
 										"num_snapshots": float64(1),
-										"rollup_retention_policy": map[string]interface{}{
+										"rollup_retention_policy": map[string]any{
 											"snapshot_interval_type": "HOURLY",
 											"multiple":               float64(1),
 										},
@@ -4063,9 +3061,9 @@ func TestOperations_CreateProtectionRule(t *testing.T) {
 							},
 						},
 					},
-					"category_filter": map[string]interface{}{
+					"category_filter": map[string]any{
 						"type":      "CATEGORIES_MATCH_ALL",
-						"kind_list": []interface{}{"1", "2"},
+						"kind_list": []any{"1", "2"},
 					},
 				},
 				"name":        "protection_rule_name",
@@ -4073,18 +3071,21 @@ func TestOperations_CreateProtectionRule(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		assert := assert.New(t)
-		if !assert.Equal(v, expected, "The response should be the same") {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		assertions := assert.New(t)
+		if !assertions.Equal(actual, expected, "The response should be the same") {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "protection_rule",
@@ -4093,272 +3094,194 @@ func TestOperations_CreateProtectionRule(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *ProtectionRuleInput
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ProtectionRuleResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateProtectionRule",
-			fields{c},
-			args{
-				&ProtectionRuleInput{
-					APIVersion: "3.1",
-					Metadata: &Metadata{
-						Name: ptr.To("protection_rule_test_name"),
-						Kind: ptr.To("protection_rule"),
-						UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+	request := &ProtectionRuleInput{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Name: new("protection_rule_test_name"),
+			Kind: new("protection_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &ProtectionRuleSpec{
+			Name:        "protection_rule_name",
+			Description: "description_test",
+			Resources: &ProtectionRuleResources{
+				StartTime: "00h:00m",
+				OrderedAvailabilityZoneList: []*OrderedAvailabilityZoneList{
+					{
+						AvailabilityZoneURL: "url test",
+						ClusterUUID:         "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 					},
-					Spec: &ProtectionRuleSpec{
-						Name:        "protection_rule_name",
-						Description: "description_test",
-						Resources: &ProtectionRuleResources{
-							StartTime: "00h:00m",
-							OrderedAvailabilityZoneList: []*OrderedAvailabilityZoneList{
-								{
-									AvailabilityZoneURL: "url test",
-									ClusterUUID:         "cfde831a-4e87-4a75-960f-89b0148aa2cc",
-								},
-							},
-							AvailabilityZoneConnectivityList: []*AvailabilityZoneConnectivityList{
-								{
-									DestinationAvailabilityZoneIndex: ptr.To(int64(0)),
-									SourceAvailabilityZoneIndex:      ptr.To(int64(0)),
-									SnapshotScheduleList: []*SnapshotScheduleList{
-										{
-											RecoveryPointObjectiveSecs: ptr.To(int64(0)),
-											AutoSuspendTimeoutSecs:     ptr.To(int64(0)),
-											SnapshotType:               "CRASH_CONSISTENT",
-											LocalSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
-												NumSnapshots: ptr.To(int64(1)),
-												RollupRetentionPolicy: &RollupRetentionPolicy{
-													SnapshotIntervalType: "HOURLY",
-													Multiple:             ptr.To(int64(1)),
-												},
-											},
-											RemoteSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
-												NumSnapshots: ptr.To(int64(1)),
-												RollupRetentionPolicy: &RollupRetentionPolicy{
-													SnapshotIntervalType: "HOURLY",
-													Multiple:             ptr.To(int64(1)),
-												},
-											},
-										},
+				},
+				AvailabilityZoneConnectivityList: []*AvailabilityZoneConnectivityList{
+					{
+						DestinationAvailabilityZoneIndex: new(int64(0)),
+						SourceAvailabilityZoneIndex:      new(int64(0)),
+						SnapshotScheduleList: []*SnapshotScheduleList{
+							{
+								RecoveryPointObjectiveSecs: new(int64(0)),
+								AutoSuspendTimeoutSecs:     new(int64(0)),
+								SnapshotType:               "CRASH_CONSISTENT",
+								LocalSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
+									NumSnapshots: new(int64(1)),
+									RollupRetentionPolicy: &RollupRetentionPolicy{
+										SnapshotIntervalType: "HOURLY",
+										Multiple:             new(int64(1)),
 									},
 								},
-							},
-							CategoryFilter: &CategoryFilter{
-								Type:     ptr.To("CATEGORIES_MATCH_ALL"),
-								KindList: []*string{ptr.To("1"), ptr.To("2")},
+								RemoteSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
+									NumSnapshots: new(int64(1)),
+									RollupRetentionPolicy: &RollupRetentionPolicy{
+										SnapshotIntervalType: "HOURLY",
+										Multiple:             new(int64(1)),
+									},
+								},
 							},
 						},
 					},
 				},
-			},
-			&ProtectionRuleResponse{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: ptr.To("protection_rule"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+				CategoryFilter: &CategoryFilter{
+					Type:     new("CATEGORIES_MATCH_ALL"),
+					KindList: []*string{new("1"), new("2")},
 				},
 			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.CreateProtectionRule(context.Background(), tt.args.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.CreateProtectionRule() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.CreateProtectionRule() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &ProtectionRuleResponse{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("protection_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateProtectionRule", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.CreateProtectionRule(context.Background(), request)
+		testOperationResult(t, "CreateProtectionRule", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetProtectionRule(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/protection_rules/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"protection_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+
+		testFprint(t, w, `{"metadata": {"kind":"protection_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	response := &ProtectionRuleResponse{}
 	response.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("protection_rule"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("protection_rule"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ProtectionRuleResponse
-		wantErr bool
-	}{
-		{
-			"Test GetProtectionRules OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetProtectionRule(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetProtectionRules() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetProtectionRules() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetProtectionRules OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetProtectionRule(context.Background(), uuid)
+		testOperationResult(t, "GetProtectionRules", got, expected, err, false)
+	})
 }
 
 func TestOperations_ListProtectionRules(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/protection_rules/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"protection_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"protection_rule","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	responseList := &ProtectionRulesListResponse{}
 	responseList.Entities = make([]*ProtectionRuleResponse, 1)
 	responseList.Entities[0] = &ProtectionRuleResponse{}
 	responseList.Entities[0].Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("protection_rule"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("protection_rule"),
 	}
 
 	input := &DSMetadata{
-		Length: ptr.To(int64(1)),
+		Length: new(int64(1)),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		getEntitiesRequest *DSMetadata
-	}
+	getEntitiesRequest := input
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ProtectionRulesListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListProtectionRules OK",
-			fields{c},
-			args{input},
-			responseList,
-			false,
-		},
-	}
+	expected := responseList
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListProtectionRules(context.Background(), tt.args.getEntitiesRequest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListProtectionRules() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListProtectionRules() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test ListProtectionRules OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.ListProtectionRules(context.Background(), getEntitiesRequest)
+		testOperationResult(t, "ListProtectionRules", got, expected, err, false)
+	})
 }
 
 func TestOperations_UpdateProtectionRules(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/protection_rules/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPut)
+	mux.HandleFunc("/api/nutanix/v3/protection_rules/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPut)
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"api_version": "3.1",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "protection_rule_test_name",
 				"kind": "protection_rule",
 				"uuid": "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 			},
-			"spec": map[string]interface{}{
-				"resources": map[string]interface{}{
+			"spec": map[string]any{
+				"resources": map[string]any{
 					"start_time": "00h:00m",
-					"ordered_availability_zone_list": []interface{}{
-						map[string]interface{}{
+					"ordered_availability_zone_list": []any{
+						map[string]any{
 							"availability_zone_url": "url test",
 							"cluster_uuid":          "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 						},
 					},
-					"availability_zone_connectivity_list": []interface{}{
-						map[string]interface{}{
+					"availability_zone_connectivity_list": []any{
+						map[string]any{
 							"destination_availability_zone_index": float64(0),
 							"source_availability_zone_index":      float64(0),
-							"snapshot_schedule_list": []interface{}{
-								map[string]interface{}{
+							"snapshot_schedule_list": []any{
+								map[string]any{
 									"recovery_point_objective_secs": float64(0),
 									"auto_suspend_timeout_secs":     float64(0),
 									"snapshot_type":                 "CRASH_CONSISTENT",
-									"local_snapshot_retention_policy": map[string]interface{}{
+									"local_snapshot_retention_policy": map[string]any{
 										"num_snapshots": float64(1),
-										"rollup_retention_policy": map[string]interface{}{
+										"rollup_retention_policy": map[string]any{
 											"snapshot_interval_type": "HOURLY",
 											"multiple":               float64(1),
 										},
 									},
-									"remote_snapshot_retention_policy": map[string]interface{}{
+									"remote_snapshot_retention_policy": map[string]any{
 										"num_snapshots": float64(1),
-										"rollup_retention_policy": map[string]interface{}{
+										"rollup_retention_policy": map[string]any{
 											"snapshot_interval_type": "HOURLY",
 											"multiple":               float64(1),
 										},
@@ -4367,9 +3290,9 @@ func TestOperations_UpdateProtectionRules(t *testing.T) {
 							},
 						},
 					},
-					"category_filter": map[string]interface{}{
+					"category_filter": map[string]any{
 						"type":      "CATEGORIES_MATCH_ALL",
-						"kind_list": []interface{}{"1", "2"},
+						"kind_list": []any{"1", "2"},
 					},
 				},
 				"name":        "protection_rule_name",
@@ -4377,18 +3300,21 @@ func TestOperations_UpdateProtectionRules(t *testing.T) {
 			},
 		}
 
-		var v map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&v)
+		var actual map[string]any
+
+		err := json.NewDecoder(request.Body).Decode(&actual)
 		if err != nil {
-			t.Fatalf("decode json: %v", err)
+			t.Errorf("decode json: %v", err)
+
+			return
 		}
 
-		assert := assert.New(t)
-		if !assert.Equal(v, expected, "The response should be the same") {
-			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
+		assertions := assert.New(t)
+		if !assertions.Equal(actual, expected, "The response should be the same") {
+			t.Errorf("Request body\n got=%#v\nwant=%#v", actual, expected)
 		}
 
-		_, _ = fmt.Fprintf(w, `{
+		testFprint(t, writer, `{
 			"api_version": "3.1",
 			"metadata": {
 				"kind": "protection_rule",
@@ -4397,115 +3323,87 @@ func TestOperations_UpdateProtectionRules(t *testing.T) {
 		}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-		body *ProtectionRuleInput
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ProtectionRuleResponse
-		wantErr bool
-	}{
-		{
-			"Test CreateProtectionRule",
-			fields{c},
-			args{
-				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
-				&ProtectionRuleInput{
-					APIVersion: "3.1",
-					Metadata: &Metadata{
-						Name: ptr.To("protection_rule_test_name"),
-						Kind: ptr.To("protection_rule"),
-						UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+	body := &ProtectionRuleInput{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Name: new("protection_rule_test_name"),
+			Kind: new("protection_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
+		Spec: &ProtectionRuleSpec{
+			Name:        "protection_rule_name",
+			Description: "description_test",
+			Resources: &ProtectionRuleResources{
+				StartTime: "00h:00m",
+				OrderedAvailabilityZoneList: []*OrderedAvailabilityZoneList{
+					{
+						AvailabilityZoneURL: "url test",
+						ClusterUUID:         "cfde831a-4e87-4a75-960f-89b0148aa2cc",
 					},
-					Spec: &ProtectionRuleSpec{
-						Name:        "protection_rule_name",
-						Description: "description_test",
-						Resources: &ProtectionRuleResources{
-							StartTime: "00h:00m",
-							OrderedAvailabilityZoneList: []*OrderedAvailabilityZoneList{
-								{
-									AvailabilityZoneURL: "url test",
-									ClusterUUID:         "cfde831a-4e87-4a75-960f-89b0148aa2cc",
-								},
-							},
-							AvailabilityZoneConnectivityList: []*AvailabilityZoneConnectivityList{
-								{
-									DestinationAvailabilityZoneIndex: ptr.To(int64(0)),
-									SourceAvailabilityZoneIndex:      ptr.To(int64(0)),
-									SnapshotScheduleList: []*SnapshotScheduleList{
-										{
-											RecoveryPointObjectiveSecs: ptr.To(int64(0)),
-											AutoSuspendTimeoutSecs:     ptr.To(int64(0)),
-											SnapshotType:               "CRASH_CONSISTENT",
-											LocalSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
-												NumSnapshots: ptr.To(int64(1)),
-												RollupRetentionPolicy: &RollupRetentionPolicy{
-													SnapshotIntervalType: "HOURLY",
-													Multiple:             ptr.To(int64(1)),
-												},
-											},
-											RemoteSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
-												NumSnapshots: ptr.To(int64(1)),
-												RollupRetentionPolicy: &RollupRetentionPolicy{
-													SnapshotIntervalType: "HOURLY",
-													Multiple:             ptr.To(int64(1)),
-												},
-											},
-										},
+				},
+				AvailabilityZoneConnectivityList: []*AvailabilityZoneConnectivityList{
+					{
+						DestinationAvailabilityZoneIndex: new(int64(0)),
+						SourceAvailabilityZoneIndex:      new(int64(0)),
+						SnapshotScheduleList: []*SnapshotScheduleList{
+							{
+								RecoveryPointObjectiveSecs: new(int64(0)),
+								AutoSuspendTimeoutSecs:     new(int64(0)),
+								SnapshotType:               "CRASH_CONSISTENT",
+								LocalSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
+									NumSnapshots: new(int64(1)),
+									RollupRetentionPolicy: &RollupRetentionPolicy{
+										SnapshotIntervalType: "HOURLY",
+										Multiple:             new(int64(1)),
 									},
 								},
-							},
-							CategoryFilter: &CategoryFilter{
-								Type:     ptr.To("CATEGORIES_MATCH_ALL"),
-								KindList: []*string{ptr.To("1"), ptr.To("2")},
+								RemoteSnapshotRetentionPolicy: &SnapshotRetentionPolicy{
+									NumSnapshots: new(int64(1)),
+									RollupRetentionPolicy: &RollupRetentionPolicy{
+										SnapshotIntervalType: "HOURLY",
+										Multiple:             new(int64(1)),
+									},
+								},
 							},
 						},
 					},
 				},
-			},
-			&ProtectionRuleResponse{
-				APIVersion: "3.1",
-				Metadata: &Metadata{
-					Kind: ptr.To("protection_rule"),
-					UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+				CategoryFilter: &CategoryFilter{
+					Type:     new("CATEGORIES_MATCH_ALL"),
+					KindList: []*string{new("1"), new("2")},
 				},
 			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.UpdateProtectionRule(context.Background(), tt.args.UUID, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.UpdateProtectionRules() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.UpdateProtectionRules() = %v, want %v", got, tt.want)
-			}
-		})
+	expected := &ProtectionRuleResponse{
+		APIVersion: "3.1",
+		Metadata: &Metadata{
+			Kind: new("protection_rule"),
+			UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		},
 	}
+
+	t.Run("Test CreateProtectionRule", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.UpdateProtectionRule(context.Background(), uuid, body)
+		testOperationResult(t, "UpdateProtectionRules", got, expected, err, false)
+	})
 }
 
 func TestOperations_DeleteProtectionRules(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/protection_rules/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nutanix/v3/protection_rules/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(_ http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 	})
 
@@ -4525,39 +3423,38 @@ func TestOperations_DeleteProtectionRules(t *testing.T) {
 	}{
 		{
 			"Test DeleteProtectionRules OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			true,
 		},
 
 		{
 			"Test DeleteProtectionRules Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if _, err := op.DeleteProtectionRule(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteProtectionRules() error = %v, wantErr %v", err, tt.wantErr)
+			if _, err := op.DeleteProtectionRule(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteProtectionRules() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_TestProcessProtectionRule(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/protection_rules/cfde831a-4e87-4a75-960f-89b0148aa2cc/process",
-		func(w http.ResponseWriter, r *http.Request) {
+		func(_ http.ResponseWriter, r *http.Request) {
 			testHTTPMethod(t, r, http.MethodPost)
 		},
 	)
@@ -4578,27 +3475,26 @@ func TestOperations_TestProcessProtectionRule(t *testing.T) {
 	}{
 		{
 			"Test ProcessProtectionRule OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			false,
 		},
 
 		{
 			"Test ProcessProtectionRule Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if err := op.ProcessProtectionRule(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ProcessProtectionRule() error = %v, wantErr %v", err, tt.wantErr)
+			if err := op.ProcessProtectionRule(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.ProcessProtectionRule() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
@@ -4616,13 +3512,13 @@ func TestOperations_CreateRecoveryPlan(t *testing.T) {
 		Mode: keploy.MODE_TEST,
 		Name: t.Name(),
 	})
-	rp := &models.RecoveryPlanIntentInput{
+	recoveryPlan := &models.RecoveryPlanIntentInput{
 		APIVersion: "3.1",
 		Metadata: &models.RecoveryPlanMetadata{
 			Kind: "recovery_plan",
 		},
 		Spec: &models.RecoveryPlan{
-			Name: ptr.To("recovery_plan_test_name-4"),
+			Name: new("recovery_plan_test_name-4"),
 			Resources: &models.RecoveryPlanResources{
 				VolumeGroupRecoveryInfoList: []*models.RecoveryPlanVolumeGroupRecoveryInfo{
 					{
@@ -4650,20 +3546,20 @@ func TestOperations_CreateRecoveryPlan(t *testing.T) {
 					PrimaryLocationIndex: 0,
 					AvailabilityZoneList: []*models.AvailabilityZoneInformation{
 						{
-							AvailabilityZoneURL: ptr.To("4b194a2d-5468-4e92-8953-571cb39be910"),
+							AvailabilityZoneURL: new("4b194a2d-5468-4e92-8953-571cb39be910"),
 							ClusterReferenceList: []*models.ClusterReference{
 								{
 									Kind: "cluster",
-									UUID: ptr.To("0006200e-fe43-236a-0000-00000000601e"),
+									UUID: new("0006200e-fe43-236a-0000-00000000601e"),
 								},
 							},
 						},
 						{
-							AvailabilityZoneURL: ptr.To("4b194a2d-5468-4e92-8953-571cb39be910"),
+							AvailabilityZoneURL: new("4b194a2d-5468-4e92-8953-571cb39be910"),
 							ClusterReferenceList: []*models.ClusterReference{
 								{
 									Kind: "cluster",
-									UUID: ptr.To("0006200e-f1f5-ef7f-0000-00000000601d"),
+									UUID: new("0006200e-f1f5-ef7f-0000-00000000601d"),
 								},
 							},
 						},
@@ -4672,10 +3568,12 @@ func TestOperations_CreateRecoveryPlan(t *testing.T) {
 			},
 		},
 	}
-	resp, err := v3Client.V3.CreateRecoveryPlan(kctx, rp)
+
+	resp, err := v3Client.V3.CreateRecoveryPlan(kctx, recoveryPlan)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
+
 	require.NotNil(t, resp.Status)
 	require.NotNil(t, resp.Status.ExecutionContext)
 	assert.Equal(t, "0fd3ad6f-7243-4e7d-967d-bfdfaf918f5b", resp.Status.ExecutionContext.TaskUUID)
@@ -4694,10 +3592,12 @@ func TestOperations_GetRecoveryPlan(t *testing.T) {
 		Mode: keploy.MODE_TEST,
 		Name: t.Name(),
 	})
+
 	resp, err := v3Client.V3.GetRecoveryPlan(kctx, "b2fe0a67-3be2-407c-8e83-9b5d6af14cec")
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
+
 	assert.Equal(t, "recovery_plan_test_name-4", *resp.Spec.Name)
 }
 
@@ -4713,7 +3613,7 @@ func TestOperations_ListRecoveryPlans(t *testing.T) {
 		Mode: keploy.MODE_TEST,
 		Name: t.Name(),
 	})
-	_, err = v3Client.V3.ListRecoveryPlans(kctx, &DSMetadata{Length: ptr.To(int64(10))})
+	_, err = v3Client.V3.ListRecoveryPlans(kctx, &DSMetadata{Length: new(int64(10))})
 	assert.NoError(t, err)
 }
 
@@ -4729,13 +3629,13 @@ func TestOperations_UpdateRecoveryPlans(t *testing.T) {
 		Mode: keploy.MODE_TEST,
 		Name: t.Name(),
 	})
-	rp := &models.RecoveryPlanIntentInput{
+	recoveryPlan := &models.RecoveryPlanIntentInput{
 		APIVersion: "3.1",
 		Metadata: &models.RecoveryPlanMetadata{
 			Kind: "recovery_plan",
 		},
 		Spec: &models.RecoveryPlan{
-			Name: ptr.To("recovery_plan_test_name-5"),
+			Name: new("recovery_plan_test_name-5"),
 			Resources: &models.RecoveryPlanResources{
 				VolumeGroupRecoveryInfoList: []*models.RecoveryPlanVolumeGroupRecoveryInfo{
 					{
@@ -4763,20 +3663,20 @@ func TestOperations_UpdateRecoveryPlans(t *testing.T) {
 					PrimaryLocationIndex: 0,
 					AvailabilityZoneList: []*models.AvailabilityZoneInformation{
 						{
-							AvailabilityZoneURL: ptr.To("4b194a2d-5468-4e92-8953-571cb39be910"),
+							AvailabilityZoneURL: new("4b194a2d-5468-4e92-8953-571cb39be910"),
 							ClusterReferenceList: []*models.ClusterReference{
 								{
 									Kind: "cluster",
-									UUID: ptr.To("0006200e-fe43-236a-0000-00000000601e"),
+									UUID: new("0006200e-fe43-236a-0000-00000000601e"),
 								},
 							},
 						},
 						{
-							AvailabilityZoneURL: ptr.To("4b194a2d-5468-4e92-8953-571cb39be910"),
+							AvailabilityZoneURL: new("4b194a2d-5468-4e92-8953-571cb39be910"),
 							ClusterReferenceList: []*models.ClusterReference{
 								{
 									Kind: "cluster",
-									UUID: ptr.To("0006200e-f1f5-ef7f-0000-00000000601d"),
+									UUID: new("0006200e-f1f5-ef7f-0000-00000000601d"),
 								},
 							},
 						},
@@ -4785,9 +3685,9 @@ func TestOperations_UpdateRecoveryPlans(t *testing.T) {
 			},
 		},
 	}
-	_, err = v3Client.V3.UpdateRecoveryPlan(kctx, "b2fe0a67-3be2-407c-8e83-9b5d6af14cec", rp)
+	_, err = v3Client.V3.UpdateRecoveryPlan(kctx, "b2fe0a67-3be2-407c-8e83-9b5d6af14cec", recoveryPlan)
 	assert.NoError(t, err)
-	assert.Equal(t, "recovery_plan_test_name-5", *rp.Spec.Name)
+	assert.Equal(t, "recovery_plan_test_name-5", *recoveryPlan.Spec.Name)
 }
 
 func TestOperations_DeleteRecoveryPlan(t *testing.T) {
@@ -4807,87 +3707,64 @@ func TestOperations_DeleteRecoveryPlan(t *testing.T) {
 }
 
 func TestOperations_GetRecoveryPlanJob(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"recovery_plan_jobs","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
+
+		testFprint(t, w, `{"metadata": {"kind":"recovery_plan_jobs","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}`)
 	})
 
 	response := &RecoveryPlanJobIntentResponse{}
 	response.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("recovery_plan_jobs"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("recovery_plan_jobs"),
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *RecoveryPlanJobIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test GetRecoveryPlanJob OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetRecoveryPlanJob(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetRecoveryPlanJob() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetRecoveryPlanJob() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetRecoveryPlanJob OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetRecoveryPlanJob(context.Background(), uuid)
+		testOperationResult(t, "GetRecoveryPlanJob", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetRecoveryPlanJobStatus(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	// status in the URL can have one of the 2 following values: execution_status, cleanup_status
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc/execution_status", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"operation_status": {"percentage_complete":55,"status":"Running"}}`)
+
+		testFprint(t, w, `{"operation_status": {"percentage_complete":55,"status":"Running"}}`)
 	})
 
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc/cleanup_status", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"operation_status": {"percentage_complete":55,"status":"Running"},"preprocessing_status": {"percentage_complete":100,"status":"Complete"}}`)
+
+		testFprint(t, w, `{"operation_status": {"percentage_complete":55,"status":"Running"},"preprocessing_status": {"percentage_complete":100,"status":"Complete"}}`)
 	})
 
-	execution_status_response := &RecoveryPlanJobExecutionStatus{
+	executionStatusResponse := &RecoveryPlanJobExecutionStatus{
 		OperationStatus: &RecoveryPlanJobPhaseExecutionStatus{
 			PercentageComplete: 55,
 			Status:             "Running",
 		},
 	}
 
-	cleanup_status_response := &RecoveryPlanJobExecutionStatus{
+	cleanupStatusResponse := &RecoveryPlanJobExecutionStatus{
 		OperationStatus: &RecoveryPlanJobPhaseExecutionStatus{
 			PercentageComplete: 55,
 			Status:             "Running",
@@ -4916,44 +3793,38 @@ func TestOperations_GetRecoveryPlanJobStatus(t *testing.T) {
 	}{
 		{
 			"Test GetRecoveryPlanJobStatus ExecutionStatus OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc", "execution_status"},
-			execution_status_response,
+			executionStatusResponse,
 			false,
 		},
 		{
 			"Test GetRecoveryPlanJobStatus CleanupStatus OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc", "cleanup_status"},
-			cleanup_status_response,
+			cleanupStatusResponse,
 			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			got, err := op.GetRecoveryPlanJobStatus(context.Background(), tt.args.UUID, tt.args.Status)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetRecoveryPlanJobStatus() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetRecoveryPlanJobStatus() = %v, want %v", got, tt.want)
-			}
+
+			got, err := op.GetRecoveryPlanJobStatus(context.Background(), testCase.args.UUID, testCase.args.Status)
+			testOperationResult(t, "GetRecoveryPlanJobStatus", got, testCase.want, err, testCase.wantErr)
 		})
 	}
 }
 
 func TestOperations_DeleteRecoveryPlanJob(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(_ http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodDelete)
 	})
 
@@ -4973,45 +3844,46 @@ func TestOperations_DeleteRecoveryPlanJob(t *testing.T) {
 	}{
 		{
 			"Test DeleteRecoveryPlanJobs OK",
-			fields{c},
+			fields{client},
 			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
 			false,
 		},
 
 		{
 			"Test DeleteRecoveryPlanJobs Errored",
-			fields{c},
+			fields{client},
 			args{},
 			true,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
-			if err := op.DeleteRecoveryPlanJob(context.Background(), tt.args.UUID); (err != nil) != tt.wantErr {
-				t.Errorf("Operations.DeleteRecoveryPlanJob() error = %v, wantErr %v", err, tt.wantErr)
+			if err := op.DeleteRecoveryPlanJob(context.Background(), testCase.args.UUID); (err != nil) != testCase.wantErr {
+				t.Errorf("Operations.DeleteRecoveryPlanJob() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
 }
 
 func TestOperations_PerformRecoveryPlanJobAction(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc/cleanup", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"task_uuid": "ff1b9547-dc9a-4ebd-a2ff-f2b718af935e"}`)
+
+		testFprint(t, w, `{"task_uuid": "ff1b9547-dc9a-4ebd-a2ff-f2b718af935e"}`)
 	})
 
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/cfde831a-4e87-4a75-960f-89b0148aa2cc/rerun", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"task_uuid": "ff1b9547-dc9a-4ebd-a2ff-f2b718af935e"}`)
+
+		testFprint(t, w, `{"task_uuid": "ff1b9547-dc9a-4ebd-a2ff-f2b718af935e"}`)
 	})
 
 	type fields struct {
@@ -5033,12 +3905,12 @@ func TestOperations_PerformRecoveryPlanJobAction(t *testing.T) {
 	}{
 		{
 			"Test PerformRecoveryPlanJobAction Cleanup OK",
-			fields{c},
+			fields{client},
 			args{
 				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
 				"cleanup",
 				&RecoveryPlanJobActionRequest{
-					ShouldContinueRerunOnValidationFailure: ptr.To(true),
+					ShouldContinueRerunOnValidationFailure: new(true),
 				},
 			},
 			&RecoveryPlanJobResponse{
@@ -5048,12 +3920,12 @@ func TestOperations_PerformRecoveryPlanJobAction(t *testing.T) {
 		},
 		{
 			"Test PerformRecoveryPlanJobAction Rerun OK",
-			fields{c},
+			fields{client},
 			args{
 				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
 				"rerun",
 				&RecoveryPlanJobActionRequest{
-					ShouldContinueRerunOnValidationFailure: ptr.To(true),
+					ShouldContinueRerunOnValidationFailure: new(true),
 				},
 			},
 			&RecoveryPlanJobResponse{
@@ -5063,12 +3935,12 @@ func TestOperations_PerformRecoveryPlanJobAction(t *testing.T) {
 		},
 		{
 			"Test PerformRecoveryPlanJobAction Unsupported Action Errored",
-			fields{c},
+			fields{client},
 			args{
 				"cfde831a-4e87-4a75-960f-89b0148aa2cc",
 				"jump",
 				&RecoveryPlanJobActionRequest{
-					ShouldContinueRerunOnValidationFailure: ptr.To(true),
+					ShouldContinueRerunOnValidationFailure: new(true),
 				},
 			},
 			&RecoveryPlanJobResponse{},
@@ -5076,147 +3948,95 @@ func TestOperations_PerformRecoveryPlanJobAction(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			op := Operations{
-				client: tt.fields.client,
+				client: testCase.fields.client,
 			}
 			got, err := op.PerformRecoveryPlanJobAction(context.Background(),
-				tt.args.UUID, tt.args.action, tt.args.request)
+				testCase.args.UUID, testCase.args.action, testCase.args.request)
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.PerformRecoveryPlanJobAction() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.PerformRecoveryPlanJobAction() = %v, want %v", got, tt.want)
-			}
+			testOperationResult(t, "PerformRecoveryPlanJobAction", got, testCase.want, err, testCase.wantErr)
 		})
 	}
 }
 
 func TestOperations_ListRecoveryPlanJobs(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/recovery_plan_jobs/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"entities":[{"metadata": {"kind":"recovery_plan_jobs","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
+
+		testFprint(t, w, `{"entities":[{"metadata": {"kind":"recovery_plan_jobs","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}}]}`)
 	})
 
 	responseList := &RecoveryPlanJobListResponse{}
 	responseList.Entities = make([]*RecoveryPlanJobIntentResponse, 1)
 	responseList.Entities[0] = &RecoveryPlanJobIntentResponse{}
 	responseList.Entities[0].Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("recovery_plan_jobs"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("recovery_plan_jobs"),
 	}
 
-	type fields struct {
-		client *internal.Client
+	operationClient := client
+
+	request := &DSMetadata{
+		Length: new(int64(1)),
 	}
 
-	type args struct {
-		request *DSMetadata
-	}
+	expected := responseList
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *RecoveryPlanJobListResponse
-		wantErr bool
-	}{
-		{
-			"Test ListRecoveryPlanJobs OK",
-			fields{c},
-			args{
-				&DSMetadata{
-					Length: ptr.To(int64(1)),
-				},
-			},
-			responseList,
-			false,
-		},
-	}
+	t.Run("Test ListRecoveryPlanJobs OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.ListRecoveryPlanJobs(context.Background(), tt.args.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.ListRecoveryPlanJobs() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.ListRecoveryPlanJobs() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+		got, err := op.ListRecoveryPlanJobs(context.Background(), request)
+		testOperationResult(t, "ListRecoveryPlanJobs", got, expected, err, false)
+	})
 }
 
 func TestOperations_GroupsGetEntities(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/groups", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{"filtered_group_count": 3, "group_results": [{"entity_results": [{"entity_id":"some_entity_id", "data":[{"values":[{"time":100, "values":["a", "b", "c"]}]}]}]}]}`)
+
+		testFprint(t, w, `{"filtered_group_count": 3, "group_results": [{"entity_results": [{"entity_id":"some_entity_id", "data":[{"values":[{"time":100, "values":["a", "b", "c"]}]}]}]}]}`)
 	})
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		request *GroupsGetEntitiesRequest
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *GroupsGetEntitiesResponse
-		wantErr bool
-	}{
-		{
-			"Test GroupsGetEntities OK",
-			fields{c},
-			args{
-				&GroupsGetEntitiesRequest{
-					EntityType: ptr.To("volume_group_config"),
-					GroupMemberAttributes: []*GroupsRequestedAttribute{
-						{
-							Attribute: ptr.To("synchronous_replication_status"),
-						},
-						{
-							Attribute: ptr.To("_master_cluster_uuid_"),
-						},
-					},
-					FilterCriteria: "uuid=in=uuid1|uuid2",
-				},
+	request := &GroupsGetEntitiesRequest{
+		EntityType: new("volume_group_config"),
+		GroupMemberAttributes: []*GroupsRequestedAttribute{
+			{
+				Attribute: new("synchronous_replication_status"),
 			},
-			&GroupsGetEntitiesResponse{
-				FilteredGroupCount: 3,
-				GroupResults: []*GroupsGroupResult{
+			{
+				Attribute: new("_master_cluster_uuid_"),
+			},
+		},
+		FilterCriteria: "uuid=in=uuid1|uuid2",
+	}
+
+	expected := &GroupsGetEntitiesResponse{
+		FilteredGroupCount: 3,
+		GroupResults: []*GroupsGroupResult{
+			{
+				EntityResults: []*GroupsEntity{
 					{
-						EntityResults: []*GroupsEntity{
+						EntityID: "some_entity_id",
+						Data: []*GroupsFieldData{
 							{
-								EntityID: "some_entity_id",
-								Data: []*GroupsFieldData{
+								Values: []*GroupsTimevaluePair{
 									{
-										Values: []*GroupsTimevaluePair{
-											{
-												Time:   100,
-												Values: []string{"a", "b", "c"},
-											},
-										},
+										Time:   100,
+										Values: []string{"a", "b", "c"},
 									},
 								},
 							},
@@ -5224,91 +4044,87 @@ func TestOperations_GroupsGetEntities(t *testing.T) {
 					},
 				},
 			},
-			false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GroupsGetEntities(context.Background(), tt.args.request)
+	t.Run("Test GroupsGetEntities OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+		got, err := op.GroupsGetEntities(context.Background(), request)
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GroupsGetEntities() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GroupsGetEntities() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+		testOperationResult(t, "GroupsGetEntities", got, expected, err, false)
+	})
 }
 
 func TestOperations_GetAvailabilityZone(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/availability_zones/cfde831a-4e87-4a75-960f-89b0148aa2cc", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodGet)
-		_, _ = fmt.Fprint(w, `{"metadata": {"kind":"availability_zone","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}, "status":{"resources":{"management_url":"dfde831a-4e87-4a75-960f-89b0148aa2cc"}}}`)
+
+		testFprint(t, w, `{"metadata": {"kind":"availability_zone","uuid":"cfde831a-4e87-4a75-960f-89b0148aa2cc"}, "status":{"resources":{"management_url":"dfde831a-4e87-4a75-960f-89b0148aa2cc"}}}`)
 	})
 
 	response := &AvailabilityZoneIntentResponse{}
 	response.Metadata = &Metadata{
-		UUID: ptr.To("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
-		Kind: ptr.To("availability_zone"),
+		UUID: new("cfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		Kind: new("availability_zone"),
 	}
 	resources := &AvailabilityZoneResources{
-		ManagementUrl: ptr.To("dfde831a-4e87-4a75-960f-89b0148aa2cc"),
+		ManagementUrl: new("dfde831a-4e87-4a75-960f-89b0148aa2cc"),
 	}
 	response.Status = &AvailabilityZoneStatus{
 		Resources: resources,
 	}
 
-	type fields struct {
-		client *internal.Client
-	}
+	operationClient := client
 
-	type args struct {
-		UUID string
-	}
+	uuid := "cfde831a-4e87-4a75-960f-89b0148aa2cc"
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *AvailabilityZoneIntentResponse
-		wantErr bool
-	}{
-		{
-			"Test GetAvailabilityZone OK",
-			fields{c},
-			args{"cfde831a-4e87-4a75-960f-89b0148aa2cc"},
-			response,
-			false,
-		},
-	}
+	expected := response
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			op := Operations{
-				client: tt.fields.client,
-			}
-			got, err := op.GetAvailabilityZone(context.Background(), tt.args.UUID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Operations.GetAvailabilityZone() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Operations.GetAvailabilityZone() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	t.Run("Test GetAvailabilityZone OK", func(t *testing.T) {
+		op := Operations{
+			client: operationClient,
+		}
+
+		got, err := op.GetAvailabilityZone(context.Background(), uuid)
+		testOperationResult(t, "GetAvailabilityZone", got, expected, err, false)
+	})
+}
+
+func TestGetPrismCentralRequest(t *testing.T) {
+	t.Parallel()
+
+	mux, client, server := setup(t)
+	t.Cleanup(server.Close)
+
+	const path = "/api/nutanix/v3/prism_central"
+	mux.HandleFunc(path, func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodGet)
+		assert.Equal(t, path, request.URL.Path)
+
+		body, err := io.ReadAll(request.Body)
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		t.Logf("GetPrismCentral request body bytes: %d", len(body))
+		assert.Empty(t, body)
+		testFprint(t, writer, `{"resources":{"type":"PC","version":"fixture-version","pc_vm_list":[]}}`)
+	})
+
+	op := Operations{client: client}
+	got, err := op.GetPrismCentral(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.NotNil(t, got.Resources)
+	assert.Equal(t, "PC", ptr.Deref(got.Resources.Type, ""))
+	assert.Equal(t, "fixture-version", ptr.Deref(got.Resources.Version, ""))
+	assert.NotNil(t, got.Resources.PcVMList)
 }
 
 func TestOperations_GetPrismCentral(t *testing.T) {
@@ -5345,6 +4161,7 @@ func TestOperations_ListSubnet(t *testing.T) {
 	subnets, err := v3Client.V3.ListSubnet(kctx, &DSMetadata{})
 	require.NoError(t, err)
 	assert.Len(t, subnets.Entities, 3)
+
 	for _, subnet := range subnets.Entities {
 		assert.Equal(t, "subnet", *subnet.Metadata.Kind)
 	}
@@ -5427,7 +4244,7 @@ func TestOperations_CreateIdempotenceIdentifers(t *testing.T) {
 		kctx,
 		&models.IdempotenceIdentifiersInput{
 			ClientIdentifier:       "testclient",
-			Count:                  ptr.To(int64(2)),
+			Count:                  new(int64(2)),
 			ValidDurationInMinutes: 10,
 		},
 	)
@@ -5480,40 +4297,40 @@ func createVMIntentInput() *VMIntentInput {
 	return &VMIntentInput{
 		Spec: &VM{
 			ClusterReference: &Reference{
-				Kind: ptr.To("cluster"),
-				UUID: ptr.To("00061f7f-44f7-19dc-3be1-7cc25586ee44"),
+				Kind: new("cluster"),
+				UUID: new("00061f7f-44f7-19dc-3be1-7cc25586ee44"),
 			},
-			Name:        ptr.To("test-vm"),
-			Description: ptr.To("test-vm-description"),
+			Name:        new("test-vm"),
+			Description: new("test-vm-description"),
 			Resources: &VMResources{
-				NumThreads:    ptr.To(int64(1)),
-				NumSockets:    ptr.To(int64(1)),
-				MemorySizeMib: ptr.To(int64(1024)),
+				NumThreads:    new(int64(1)),
+				NumSockets:    new(int64(1)),
+				MemorySizeMib: new(int64(1024)),
 				NicList: []*VMNic{
 					{
 						SubnetReference: &Reference{
-							UUID: ptr.To("b2e46975-2cde-4a49-9dda-815eb4fcd679"),
-							Kind: ptr.To("subnet"),
+							UUID: new("b2e46975-2cde-4a49-9dda-815eb4fcd679"),
+							Kind: new("subnet"),
 						},
 					},
 				},
 				BootConfig: &VMBootConfig{
-					BootType: ptr.To("UEFI"),
+					BootType: new("UEFI"),
 				},
 				DiskList: []*VMDisk{
 					{
 						DataSourceReference: &Reference{
-							Kind: ptr.To("image"),
-							UUID: ptr.To("70cfd137-a8d9-4169-a5ac-cf9ad6ddb03a"),
+							Kind: new("image"),
+							UUID: new("70cfd137-a8d9-4169-a5ac-cf9ad6ddb03a"),
 						},
-						DiskSizeMib: ptr.To(int64(8192)),
+						DiskSizeMib: new(int64(8192)),
 					},
 				},
 			},
 		},
 		Metadata: &Metadata{
-			Kind:        ptr.To("vm"),
-			SpecVersion: ptr.To(int64(1)),
+			Kind:        new("vm"),
+			SpecVersion: new(int64(1)),
 		},
 	}
 }
@@ -5531,13 +4348,13 @@ func TestOperations_CreateVM(t *testing.T) {
 
 	vmIntent := createVMIntentInput()
 
-	vm, err := v3Client.V3.CreateVM(kctx, vmIntent)
+	virtualMachine, err := v3Client.V3.CreateVM(kctx, vmIntent)
 	require.NoError(t, err)
-	require.NotNil(t, vm)
-	require.NotNil(t, vm.Status)
-	require.NotNil(t, vm.Status.ExecutionContext)
-	assert.NotNil(t, vm.Status.ExecutionContext.TaskUUID)
-	assert.IsType(t, "", vm.Status.ExecutionContext.TaskUUID)
+	require.NotNil(t, virtualMachine)
+	require.NotNil(t, virtualMachine.Status)
+	require.NotNil(t, virtualMachine.Status.ExecutionContext)
+	assert.NotNil(t, virtualMachine.Status.ExecutionContext.TaskUUID)
+	assert.IsType(t, "", virtualMachine.Status.ExecutionContext.TaskUUID)
 }
 
 func TestOperations_GetVM(t *testing.T) {
@@ -5574,7 +4391,7 @@ func TestOperations_ListVM(t *testing.T) {
 
 	vmIntent := createVMIntentInput()
 
-	vms, err := v3Client.V3.ListVM(kctx, &DSMetadata{Filter: ptr.To("vm_name==test-vm"), SortAttribute: ptr.To("name"), SortOrder: ptr.To("ASCENDING")})
+	vms, err := v3Client.V3.ListVM(kctx, &DSMetadata{Filter: new("vm_name==test-vm"), SortAttribute: new("name"), SortOrder: new("ASCENDING")})
 	require.NoError(t, err)
 	require.NotNil(t, vms)
 	require.NotEmpty(t, vms.Entities)
@@ -5598,7 +4415,7 @@ func TestOperations_UpdateVM(t *testing.T) {
 
 	vmIntent := createVMIntentInput()
 	vmIntent.Spec = vm.Spec
-	vmIntent.Spec.Description = ptr.To("updated-test-vm-description")
+	vmIntent.Spec.Description = new("updated-test-vm-description")
 
 	uvm, err := v3Client.V3.UpdateVM(kctx, "bdbbad7a-a401-4f9a-a789-2b8406905b56", vmIntent)
 	require.NoError(t, err)
@@ -5610,13 +4427,14 @@ func TestOperations_UpdateVM(t *testing.T) {
 }
 
 func TestOperations_ListAvailabilityZones(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/availability_zones/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{
+
+		testFprint(t, w, `{
 			"api_version": "3.1",
 			"metadata": {"kind": "availability_zone", "length": 2, "offset": 0, "total_matches": 2},
 			"entities": [
@@ -5626,8 +4444,8 @@ func TestOperations_ListAvailabilityZones(t *testing.T) {
 		}`)
 	})
 
-	op := Operations{client: c}
-	got, err := op.ListAvailabilityZones(context.Background(), &DSMetadata{Kind: ptr.To("availability_zone")})
+	op := Operations{client: client}
+	got, err := op.ListAvailabilityZones(context.Background(), &DSMetadata{Kind: new("availability_zone")})
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.NotNil(t, got.Metadata)
@@ -5638,17 +4456,19 @@ func TestOperations_ListAvailabilityZones(t *testing.T) {
 }
 
 func TestOperations_ListAllAvailabilityZones(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	// Serve two pages so pagination is exercised: total_matches=150, with
 	// itemsPerPage (100) on the first page and 50 on the second.
-	mux.HandleFunc("/api/nutanix/v3/availability_zones/list", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nutanix/v3/availability_zones/list", func(writer http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
 
 		var body DSMetadata
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+			return
+		}
 		offset := ptr.Deref(body.Offset, 0)
 
 		count := int64(100)
@@ -5662,11 +4482,11 @@ func TestOperations_ListAllAvailabilityZones(t *testing.T) {
 				`{"metadata": {"kind": "availability_zone", "uuid": "uuid-%d-%d"}}`, offset, i))
 		}
 
-		_, _ = fmt.Fprintf(w, `{"api_version": "3.1", "metadata": {"kind": "availability_zone", "length": %d, "offset": %d, "total_matches": 150}, "entities": [%s]}`,
+		testFprintf(t, writer, `{"api_version": "3.1", "metadata": {"kind": "availability_zone", "length": %d, "offset": %d, "total_matches": 150}, "entities": [%s]}`,
 			count, offset, strings.Join(entities, ","))
 	})
 
-	op := Operations{client: c}
+	op := Operations{client: client}
 	got, err := op.ListAllAvailabilityZones(context.Background(), "")
 	require.NoError(t, err)
 	require.NotNil(t, got)
@@ -5674,13 +4494,14 @@ func TestOperations_ListAllAvailabilityZones(t *testing.T) {
 }
 
 func TestOperations_ListAllAvailabilityZonesSinglePage(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
 	mux.HandleFunc("/api/nutanix/v3/availability_zones/list", func(w http.ResponseWriter, r *http.Request) {
 		testHTTPMethod(t, r, http.MethodPost)
-		_, _ = fmt.Fprint(w, `{
+
+		testFprint(t, w, `{
 			"api_version": "3.1",
 			"metadata": {"kind": "availability_zone", "length": 1, "offset": 0, "total_matches": 1},
 			"entities": [
@@ -5689,7 +4510,7 @@ func TestOperations_ListAllAvailabilityZonesSinglePage(t *testing.T) {
 		}`)
 	})
 
-	op := Operations{client: c}
+	op := Operations{client: client}
 	got, err := op.ListAllAvailabilityZones(context.Background(), "")
 	require.NoError(t, err)
 	require.NotNil(t, got)
@@ -5698,43 +4519,46 @@ func TestOperations_ListAllAvailabilityZonesSinglePage(t *testing.T) {
 }
 
 func TestOperations_GetSyncReplicationCapableClusters(t *testing.T) {
-	mux, c, server := setup(t)
+	mux, client, server := setup(t)
 
 	defer server.Close()
 
-	mux.HandleFunc("/api/nutanix/v3/clusters/synchronous_replication_capable", func(w http.ResponseWriter, r *http.Request) {
-		testHTTPMethod(t, r, http.MethodPost)
+	mux.HandleFunc("/api/nutanix/v3/clusters/synchronous_replication_capable", func(writer http.ResponseWriter, request *http.Request) {
+		testHTTPMethod(t, request, http.MethodPost)
 
-		expected := map[string]interface{}{
-			"remote_availability_zone_reference": map[string]interface{}{
+		expected := map[string]any{
+			"remote_availability_zone_reference": map[string]any{
 				"kind": "availability_zone",
 				"uuid": "a5ee5f7f-c4eb-4ba6-8926-8cb7c5b81855",
 			},
-			"remote_cluster_reference": map[string]interface{}{
+			"remote_cluster_reference": map[string]any{
 				"kind": "cluster",
 				"uuid": "00064ca8-05e8-56c6-2f37-7cc2558d16f0",
 			},
 		}
 
-		var v map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&v))
+		var v map[string]any
+		if !assert.NoError(t, json.NewDecoder(request.Body).Decode(&v)) {
+			return
+		}
+
 		if !reflect.DeepEqual(v, expected) {
 			t.Errorf("Request body\n got=%#v\nwant=%#v", v, expected)
 		}
 
 		// Note: rtt_msecs is returned by PC as a JSON number, not a string.
-		_, _ = fmt.Fprint(w, `[{"rtt_msecs": 0.37, "cluster_reference": {"kind": "cluster", "name": "pe-1", "uuid": "00064ca8-0573-8976-1db0-7cc2558d1648"}}]`)
+		testFprint(t, writer, `[{"rtt_msecs": 0.37, "cluster_reference": {"kind": "cluster", "name": "pe-1", "uuid": "00064ca8-0573-8976-1db0-7cc2558d1648"}}]`)
 	})
 
-	op := Operations{client: c}
+	op := Operations{client: client}
 	got, err := op.GetSyncReplicationCapableClusters(context.Background(), &ClusterSyncReplicationCapableInput{
 		RemoteClusterReference: &Reference{
-			Kind: ptr.To("cluster"),
-			UUID: ptr.To("00064ca8-05e8-56c6-2f37-7cc2558d16f0"),
+			Kind: new("cluster"),
+			UUID: new("00064ca8-05e8-56c6-2f37-7cc2558d16f0"),
 		},
 		RemoteAvailabilityZoneReference: &Reference{
-			Kind: ptr.To("availability_zone"),
-			UUID: ptr.To("a5ee5f7f-c4eb-4ba6-8926-8cb7c5b81855"),
+			Kind: new("availability_zone"),
+			UUID: new("a5ee5f7f-c4eb-4ba6-8926-8cb7c5b81855"),
 		},
 	})
 	require.NoError(t, err)
@@ -5746,4 +4570,31 @@ func TestOperations_GetSyncReplicationCapableClusters(t *testing.T) {
 	assert.Equal(t, "0.37", entry.RttMsecs.String())
 	require.NotNil(t, entry.ClusterReference)
 	assert.Equal(t, "00064ca8-0573-8976-1db0-7cc2558d1648", ptr.Deref(entry.ClusterReference.UUID, ""))
+}
+
+func testFprint(t *testing.T, writer io.Writer, args ...any) {
+	t.Helper()
+
+	_, err := fmt.Fprint(writer, args...)
+	assert.NoError(t, err)
+}
+
+func testFprintf(t *testing.T, writer io.Writer, format string, args ...any) {
+	t.Helper()
+
+	_, err := fmt.Fprintf(writer, format, args...)
+	assert.NoError(t, err)
+}
+
+func testOperationResult(t *testing.T, operation string, got, want any, err error, wantErr bool) {
+	t.Helper()
+
+	if (err != nil) != wantErr {
+		t.Errorf("Operations.%s() error = %v, wantErr %v", operation, err, wantErr)
+		return
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Operations.%s() = %v, want %v", operation, got, want)
+	}
 }

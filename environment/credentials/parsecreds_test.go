@@ -1,43 +1,22 @@
-package credentials
+package credentials_test
 
 import (
 	"testing"
 
+	"github.com/nutanix-cloud-native/prism-go-client/environment/credentials"
+
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseCredentials(t *testing.T) {
-	tests := []struct {
-		name        string
-		credsData   []byte
-		wantErr     bool
-		errContains string
-		wantBasic   *BasicAuthCredential
-		wantAPIKey  *APIKeyCredential
-	}{
-		{
-			name:        "invalid top-level JSON",
-			credsData:   []byte(`not-json`),
-			wantErr:     true,
-			errContains: "failed to unmarshal the credentials data",
-		},
-		{
-			name:        "empty credentials list",
-			credsData:   []byte(`[]`),
-			wantErr:     true,
-			errContains: "no credentials found",
-		},
-		{
-			name: "unsupported credential type",
-			credsData: []byte(`[
+const fixtureMissingAuthMessage = "either username and password, or an API key must be set in provider configuration"
+
+const (
+	parseInput1 = `not-json`
+	parseInput2 = `[]`
+	parseInput3 = `[
 				{"type":"token","data":{"foo":"bar"}}
-			]`),
-			wantErr:     true,
-			errContains: "unsupported credentials type",
-		},
-		{
-			name: "basic auth success",
-			credsData: []byte(`[
+			]`
+	parseInput4 = `[
 				{
 					"type":"basic_auth",
 					"data":{
@@ -45,30 +24,14 @@ func TestParseCredentials(t *testing.T) {
 						"prismElements":null
 					}
 				}
-			]`),
-			wantBasic: &BasicAuthCredential{
-				PrismCentral: PrismCentralBasicAuth{
-					BasicAuth: BasicAuth{
-						Username: "test-user",
-						Password: "test-password",
-					},
-				},
-			},
-		},
-		{
-			name: "basic auth data unmarshal failure",
-			credsData: []byte(`[
+			]`
+	parseInput5 = `[
 				{
 					"type":"basic_auth",
 					"data":"not-an-object"
 				}
-			]`),
-			wantErr:     true,
-			errContains: "failed to unmarshal the basic-auth data",
-		},
-		{
-			name: "basic auth missing username",
-			credsData: []byte(`[
+			]`
+	parseInput6 = `[
 				{
 					"type":"basic_auth",
 					"data":{
@@ -76,13 +39,8 @@ func TestParseCredentials(t *testing.T) {
 						"prismElements":null
 					}
 				}
-			]`),
-			wantErr:     true,
-			errContains: "either username and password, or an API key must be set in provider configuration",
-		},
-		{
-			name: "basic auth missing password",
-			credsData: []byte(`[
+			]`
+	parseInput7 = `[
 				{
 					"type":"basic_auth",
 					"data":{
@@ -90,49 +48,26 @@ func TestParseCredentials(t *testing.T) {
 						"prismElements":null
 					}
 				}
-			]`),
-			wantErr:     true,
-			errContains: "either username and password, or an API key must be set in provider configuration",
-		},
-		{
-			name: "api key success",
-			credsData: []byte(`[
+			]`
+	parseInput8 = `[
 				{
 					"type":"api_key",
 					"data":{"prismCentral":{"apiKey":"test-api-key"}}
 				}
-			]`),
-			wantAPIKey: &APIKeyCredential{
-				PrismCentral: PrismCentralAPIKey{
-					APIKey: APIKey("test-api-key"),
-				},
-			},
-		},
-		{
-			name: "api key data unmarshal failure",
-			credsData: []byte(`[
+			]`
+	parseInput9 = `[
 				{
 					"type":"api_key",
 					"data":"not-an-object"
 				}
-			]`),
-			wantErr:     true,
-			errContains: "failed to unmarshal the api key data",
-		},
-		{
-			name: "api key empty value",
-			credsData: []byte(`[
+			]`
+	parseInput10 = `[
 				{
 					"type":"api_key",
 					"data":{"prismCentral":{"apiKey":""}}
 				}
-			]`),
-			wantErr:     true,
-			errContains: "either username and password, or an API key must be set in provider configuration",
-		},
-		{
-			name: "multiple credentials uses first only",
-			credsData: []byte(`[
+			]`
+	parseInput11 = `[
 				{
 					"type":"basic_auth",
 					"data":{
@@ -144,19 +79,8 @@ func TestParseCredentials(t *testing.T) {
 					"type":"api_key",
 					"data":{"prismCentral":{"apiKey":"second-api-key"}}
 				}
-			]`),
-			wantBasic: &BasicAuthCredential{
-				PrismCentral: PrismCentralBasicAuth{
-					BasicAuth: BasicAuth{
-						Username: "first-user",
-						Password: "first-pass",
-					},
-				},
-			},
-		},
-		{
-			name: "multiple credentials first invalid fails even if second valid",
-			credsData: []byte(`[
+			]`
+	parseInput12 = `[
 				{
 					"type":"basic_auth",
 					"data":{
@@ -168,35 +92,83 @@ func TestParseCredentials(t *testing.T) {
 					"type":"api_key",
 					"data":{"prismCentral":{"apiKey":"second-api-key"}}
 				}
-			]`),
-			wantErr:     true,
-			errContains: "either username and password, or an API key must be set in provider configuration",
+			]`
+)
+
+type credentialCase struct {
+	name        string
+	credsData   []byte
+	wantErr     bool
+	errContains string
+	wantBasic   *credentials.BasicAuthCredential
+	wantAPIKey  *credentials.APIKeyCredential
+}
+
+func credentialErrorCase(name, data, detail string) credentialCase {
+	return credentialCase{name: name, credsData: []byte(data), wantErr: true, errContains: detail, wantBasic: nil, wantAPIKey: nil}
+}
+
+func basicCredentialCase(name, data, username, password string) credentialCase {
+	return credentialCase{
+		name: name, credsData: []byte(data), wantErr: false, errContains: "", wantAPIKey: nil,
+		wantBasic: &credentials.BasicAuthCredential{
+			PrismCentral: credentials.PrismCentralBasicAuth{Username: username, Password: password}, PrismElements: nil,
 		},
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			creds, err := ParseCredentials(tt.credsData)
-			if tt.wantErr {
+func serviceCredentialCase(name, data, key string) credentialCase {
+	return credentialCase{
+		name: name, credsData: []byte(data), wantErr: false, errContains: "", wantBasic: nil,
+		wantAPIKey: &credentials.APIKeyCredential{PrismCentral: credentials.PrismCentralAPIKey{APIKey: credentials.APIKey(key)}},
+	}
+}
+
+func TestParseCredentials(t *testing.T) {
+	tests := []credentialCase{
+		credentialErrorCase("invalid top-level JSON", parseInput1, "failed to unmarshal the credentials data"),
+		credentialErrorCase("empty credentials list", parseInput2, "no credentials found"),
+		credentialErrorCase("unsupported credential type", parseInput3, "unsupported credentials type"),
+		basicCredentialCase("basic auth success", parseInput4, "test-user", "test-password"),
+		credentialErrorCase("basic auth data unmarshal failure", parseInput5, "failed to unmarshal the basic-auth data"),
+		credentialErrorCase("basic auth missing username", parseInput6, fixtureMissingAuthMessage),
+		credentialErrorCase("basic auth missing password", parseInput7, fixtureMissingAuthMessage),
+		serviceCredentialCase("api key success", parseInput8, "test-api-key"),
+		credentialErrorCase("api key data unmarshal failure", parseInput9, "failed to unmarshal the api key data"),
+		credentialErrorCase("api key empty value", parseInput10, fixtureMissingAuthMessage),
+		basicCredentialCase("multiple credentials uses first only", parseInput11, "first-user", "first-pass"),
+		credentialErrorCase("multiple credentials first invalid fails even if second valid", parseInput12, fixtureMissingAuthMessage),
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			creds, err := credentials.ParseCredentials(test.credsData)
+			if test.wantErr {
 				require.Error(t, err)
-				require.ErrorContains(t, err, tt.errContains)
+				require.ErrorContains(t, err, test.errContains)
+
 				return
 			}
 
 			require.NoError(t, err)
 			require.NotNil(t, creds)
-			if tt.wantBasic != nil {
-				require.Equal(t, tt.wantBasic.PrismCentral.Username, creds.Username)
-				require.Equal(t, tt.wantBasic.PrismCentral.Password, creds.Password)
+
+			if test.wantBasic != nil {
+				require.Equal(t, test.wantBasic.PrismCentral.Username, creds.Username)
+				require.Equal(t, test.wantBasic.PrismCentral.Password, creds.Password)
 				require.Empty(t, creds.APIKey)
+
 				return
 			}
-			if tt.wantAPIKey != nil {
+
+			if test.wantAPIKey != nil {
 				require.Empty(t, creds.Username)
 				require.Empty(t, creds.Password)
-				require.Equal(t, string(tt.wantAPIKey.PrismCentral.APIKey), creds.APIKey)
+				require.Equal(t, string(test.wantAPIKey.PrismCentral.APIKey), creds.APIKey)
+
 				return
 			}
+
 			require.Fail(t, "either wantBasic or wantAPIKey must be set for success cases")
 		})
 	}

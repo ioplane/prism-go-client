@@ -5,7 +5,7 @@ import "strings"
 const prismCentralService = "PRISM_CENTRAL"
 
 // IsPrismCentral checks if the cluster is a prism central instance or not
-// by checking if the service running on the cluster is PRISM_CENTRAL
+// by checking if the service running on the cluster is PRISM_CENTRAL.
 func (cluster *ClusterIntentResponse) IsPrismCentral() bool {
 	if cluster.Status == nil ||
 		cluster.Status.Resources == nil ||
@@ -24,9 +24,10 @@ func (cluster *ClusterIntentResponse) IsPrismCentral() bool {
 	return false
 }
 
-// GetPrismElements returns the prism elements from the cluster list response
+// GetPrismElements returns the prism elements from the cluster list response.
 func (clusters *ClusterListIntentResponse) GetPrismElements() []*ClusterIntentResponse {
 	var prismElements []*ClusterIntentResponse
+
 	for _, cluster := range clusters.Entities {
 		if cluster.IsPrismCentral() {
 			continue

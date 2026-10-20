@@ -1,14 +1,17 @@
-package kubernetes
+package kubernetes_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	providerk8s "github.com/nutanix-cloud-native/prism-go-client/environment/providers/kubernetes"
+
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,18 +29,25 @@ import (
 	"github.com/nutanix-cloud-native/prism-go-client/internal/certutils"
 )
 
+const (
+	fixtureValueLength  = 10
+	fixtureAPIKeyLength = 32
+)
+
 func runSecretInformer(ctx context.Context, clientset kubernetes.Interface) coreinformers.SecretInformer {
 	informerFactory := informers.NewSharedInformerFactory(clientset, time.Minute)
 	secretInformer := informerFactory.Core().V1().Secrets()
 	informer := secretInformer.Informer()
-	By("spawning secret informer", func() {
+
+	ginkgo.By("spawning secret informer", func() {
 		go informer.Run(ctx.Done())
 	})
-	By("waiting for secret informer cache to be in sync", func() {
-		Expect(
+	ginkgo.By("waiting for secret informer cache to be in sync", func() {
+		gomega.Expect(
 			cache.WaitForCacheSync(ctx.Done(), informer.HasSynced),
-		).To(BeTrue())
+		).To(gomega.BeTrue())
 	})
+
 	return secretInformer
 }
 
@@ -45,20 +55,23 @@ func runCMInformer(ctx context.Context, clientset kubernetes.Interface) coreinfo
 	informerFactory := informers.NewSharedInformerFactory(clientset, time.Minute)
 	cmInformer := informerFactory.Core().V1().ConfigMaps()
 	informer := cmInformer.Informer()
-	By("spawning cm informer", func() {
+
+	ginkgo.By("spawning cm informer", func() {
 		go informer.Run(ctx.Done())
 	})
-	By("waiting for cm informer cache to be in sync", func() {
-		Expect(
+	ginkgo.By("waiting for cm informer cache to be in sync", func() {
+		gomega.Expect(
 			cache.WaitForCacheSync(ctx.Done(), informer.HasSynced),
-		).To(BeTrue())
+		).To(gomega.BeTrue())
 	})
+
 	return cmInformer
 }
 
-var _ = Describe("Kubernetes Environment Provider", Ordered, func() {
+var _ = ginkgo.Describe("Kubernetes Environment Provider", ginkgo.Ordered, func() {
 	expectedCACert, expectedB64CACert, err := certutils.GenerateCACertForTesting()
-	Expect(err).ToNot(HaveOccurred())
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
 	var (
 		cmName         = "user-ca-bundle"
 		namespace      = "kube-system"
@@ -66,15 +79,13 @@ var _ = Describe("Kubernetes Environment Provider", Ordered, func() {
 		secretInformer coreinformers.SecretInformer
 		cmInformer     coreinformers.ConfigMapInformer
 		prov           types.Provider
-		ip             = krand.String(10)
-		username       = krand.String(10)
-		password       = krand.String(10)
+		endpointHost   = krand.String(fixtureValueLength)
+		username       = krand.String(fixtureValueLength)
+		password       = krand.String(fixtureValueLength)
 
 		fakeSecret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      secretName,
-				Namespace: namespace,
-			},
+			Name:      secretName,
+			Namespace: namespace,
 			Data: map[string][]byte{
 				"credentials": []byte(fmt.Sprintf(`
 				[
@@ -101,15 +112,16 @@ metadata:
   namespace: %s
 binaryData:
   ca.crt: %s`
+
 	fakeCMStr := fmt.Sprintf(fakeCMTemplate, cmName, namespace, expectedB64CACert)
 	decoder := serializer.NewCodecFactory(scheme.Scheme).UniversalDecoder()
 	fakeCM := &corev1.ConfigMap{}
 	err = runtime.DecodeInto(decoder, []byte(fakeCMStr), fakeCM)
-	Expect(err).ToNot(HaveOccurred())
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	fakeClientset := fake.NewSimpleClientset(fakeSecret, fakeCM)
 	prismEndpoint := credentials.NutanixPrismEndpoint{
-		Address:  ip,
+		Address:  endpointHost,
 		Port:     9440,
 		Insecure: true,
 		CredentialRef: &credentials.NutanixCredentialReference{
@@ -118,38 +130,63 @@ binaryData:
 			Namespace: namespace,
 		},
 		AdditionalTrustBundle: &credentials.NutanixTrustBundleReference{
+			Data:      "",
 			Kind:      credentials.NutanixTrustBundleKindConfigMap,
 			Name:      cmName,
 			Namespace: namespace,
 		},
 	}
-	BeforeAll(func() {
+
+	ginkgo.BeforeAll(func() {
 		secretInformer = runSecretInformer(context.TODO(), fakeClientset)
 		cmInformer = runCMInformer(context.TODO(), fakeClientset)
-		prov = NewProvider(prismEndpoint, secretInformer, cmInformer)
+		prov = providerk8s.NewProvider(prismEndpoint, secretInformer, cmInformer)
 	})
-	It("must be able to look up secret", func() {
+	ginkgo.It("rejects missing credential reference before informer access", func() {
+		invalid := providerk8s.NewProvider(credentials.NutanixPrismEndpoint{}, nil, nil)
+		endpoint, err := invalid.GetManagementEndpoint(nil)
+		gomega.Expect(endpoint).To(gomega.BeNil())
+		gomega.Expect(err).To(gomega.MatchError("credential reference must not be nil"))
+		gomega.Expect(errors.Is(err, types.ErrNotFound)).To(gomega.BeFalse())
+	})
+	ginkgo.It("must be able to look up secret", func() {
 		_, err := fakeClientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
-		Expect(err).To(Succeed())
+		gomega.Expect(err).To(gomega.Succeed())
 
 		_, err = secretInformer.Lister().Secrets(namespace).Get(secretName)
-		Expect(err).To(Succeed())
+		gomega.Expect(err).To(gomega.Succeed())
 
 		_, err = fakeClientset.CoreV1().ConfigMaps(namespace).Get(context.TODO(), cmName, metav1.GetOptions{})
-		Expect(err).To(Succeed())
+		gomega.Expect(err).To(gomega.Succeed())
 
 		_, err = cmInformer.Lister().ConfigMaps(namespace).Get(cmName)
-		Expect(err).To(Succeed())
+		gomega.Expect(err).To(gomega.Succeed())
 	})
-	It("must get management endpoint", func() {
+	ginkgo.It("keeps malformed endpoint diagnostics safe", func() {
+		const marker = "synthetic-kubernetes-url-secret-marker"
+		for _, address := range []string{"fixture:" + marker + "@%41.invalid", "%41.invalid?token=" + marker} {
+			invalidEndpoint := prismEndpoint
+			invalidEndpoint.Address = address
+			invalid := providerk8s.NewProvider(invalidEndpoint, secretInformer, cmInformer)
+			endpoint, err := invalid.GetManagementEndpoint(nil)
+			gomega.Expect(endpoint).To(gomega.BeNil())
+			gomega.Expect(err).To(gomega.HaveOccurred())
+			gomega.Expect(err.Error()).NotTo(gomega.ContainSubstring(marker))
+
+			var cause *url.Error
+			gomega.Expect(errors.As(err, &cause)).To(gomega.BeTrue())
+			gomega.Expect(cause.URL).To(gomega.Equal("https://" + address + ":9440"))
+			gomega.Expect(cause.Op).To(gomega.Equal("parse"))
+		}
+	})
+	ginkgo.It("must get management endpoint", func() {
 		me, err := prov.GetManagementEndpoint(nil)
-		Expect(err).To(Succeed())
-		addr, _ := url.Parse(fmt.Sprintf("https://%s:9440", ip))
-		Expect(me).To(BeEquivalentTo(&types.ManagementEndpoint{
-			ApiCredentials: types.ApiCredentials{
-				Username: username,
-				Password: password,
-			},
+		gomega.Expect(err).To(gomega.Succeed())
+
+		addr := &url.URL{Scheme: "https", Host: endpointHost + ":9440"}
+		gomega.Expect(me).To(gomega.BeEquivalentTo(&types.ManagementEndpoint{
+			Username:              username,
+			Password:              password,
 			Insecure:              true,
 			Address:               addr,
 			AdditionalTrustBundle: expectedCACert,
@@ -157,21 +194,19 @@ binaryData:
 	})
 })
 
-var _ = Describe("Kubernetes Environment Provider with API key credentials", Ordered, func() {
+var _ = ginkgo.Describe("Kubernetes Environment Provider with API key credentials", ginkgo.Ordered, func() {
 	var (
 		namespace      = "kube-system"
 		secretName     = "nutanix-api-key-credentials"
 		secretInformer coreinformers.SecretInformer
 		cmInformer     coreinformers.ConfigMapInformer
 		prov           types.Provider
-		ip             = krand.String(10)
-		apiKey         = krand.String(32)
+		endpointHost   = krand.String(fixtureValueLength)
+		apiKey         = krand.String(fixtureAPIKeyLength)
 
 		fakeSecret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      secretName,
-				Namespace: namespace,
-			},
+			Name:      secretName,
+			Namespace: namespace,
 			Data: map[string][]byte{
 				"credentials": []byte(fmt.Sprintf(`
 				[
@@ -191,28 +226,29 @@ var _ = Describe("Kubernetes Environment Provider with API key credentials", Ord
 
 	fakeClientset := fake.NewSimpleClientset(fakeSecret)
 	prismEndpoint := credentials.NutanixPrismEndpoint{
-		Address:  ip,
-		Port:     9440,
-		Insecure: true,
+		AdditionalTrustBundle: nil,
+		Address:               endpointHost,
+		Port:                  9440,
+		Insecure:              true,
 		CredentialRef: &credentials.NutanixCredentialReference{
 			Kind:      credentials.SecretKind,
 			Name:      secretName,
 			Namespace: namespace,
 		},
 	}
-	BeforeAll(func() {
+
+	ginkgo.BeforeAll(func() {
 		secretInformer = runSecretInformer(context.TODO(), fakeClientset)
 		cmInformer = runCMInformer(context.TODO(), fakeClientset)
-		prov = NewProvider(prismEndpoint, secretInformer, cmInformer)
+		prov = providerk8s.NewProvider(prismEndpoint, secretInformer, cmInformer)
 	})
-	It("must get management endpoint with api key credentials", func() {
+	ginkgo.It("must get management endpoint with api key credentials", func() {
 		me, err := prov.GetManagementEndpoint(nil)
-		Expect(err).To(Succeed())
-		addr, _ := url.Parse(fmt.Sprintf("https://%s:9440", ip))
-		Expect(me).To(BeEquivalentTo(&types.ManagementEndpoint{
-			ApiCredentials: types.ApiCredentials{
-				APIKey: apiKey,
-			},
+		gomega.Expect(err).To(gomega.Succeed())
+
+		addr := &url.URL{Scheme: "https", Host: endpointHost + ":9440"}
+		gomega.Expect(me).To(gomega.BeEquivalentTo(&types.ManagementEndpoint{
+			APIKey:   apiKey,
 			Insecure: true,
 			Address:  addr,
 		}))
@@ -220,6 +256,6 @@ var _ = Describe("Kubernetes Environment Provider with API key credentials", Ord
 })
 
 func TestSuite(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Kubernetes Environment Provider Suite")
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	ginkgo.RunSpecs(t, "Kubernetes Environment Provider Suite")
 }

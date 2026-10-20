@@ -1,7 +1,5 @@
+// Package credentials defines and parses the single-key JSON secret format.
 package credentials
-
-// This file defines single-key secret format by encoding entire secret
-// as JSON object.
 
 import (
 	"encoding/json"
@@ -16,10 +14,11 @@ const (
 	// APIKeyCredentialType is API key based authentication.
 	APIKeyCredentialType CredentialType = "api_key"
 
-	// KeyName is secret
+	// KeyName is secret.
 	KeyName = "credentials"
 )
 
+// Credential pairs an authentication type with its JSON payload.
 // +kubebuilder:object:generate=true
 type Credential struct {
 	Type CredentialType  `json:"type"`
@@ -33,7 +32,7 @@ type NutanixCredentials struct {
 	Credentials []Credential `json:"credentials"`
 }
 
-// BasicAuthCredential is payload in Credential.Data for type of BasicAuthCredentialType
+// BasicAuthCredential is payload in Credential.Data for type of BasicAuthCredentialType.
 type BasicAuthCredential struct {
 	// The Basic Auth (username, password) for the Prism Central
 	PrismCentral PrismCentralBasicAuth `json:"prismCentral"`
@@ -49,12 +48,14 @@ type APIKeyCredential struct {
 	PrismCentral PrismCentralAPIKey `json:"prismCentral"`
 }
 
+// BasicAuth holds username and password credentials.
 // +kubebuilder:object:generate=true
 type BasicAuth struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
+// PrismCentralBasicAuth holds Prism Central basic authentication credentials.
 // +kubebuilder:object:generate=true
 type PrismCentralBasicAuth struct {
 	BasicAuth `json:",inline"`
@@ -63,24 +64,29 @@ type PrismCentralBasicAuth struct {
 // APIKey is a string that represents an Service Account API key.
 type APIKey string
 
+// PrismCentralAPIKey holds the Prism Central API key.
 type PrismCentralAPIKey struct {
 	APIKey APIKey `json:"apiKey"`
 }
 
+// PrismElementBasicAuth associates basic authentication with a Prism Element.
 // +kubebuilder:object:generate=true
 type PrismElementBasicAuth struct {
 	BasicAuth `json:",inline"`
+
 	// Name is the unique resource name of the Prism Element (cluster) in the Prism Central's domain
 	Name string `json:"name"`
 }
 
+// NutanixCredentialKind identifies a credential source kind.
 type NutanixCredentialKind string
 
 const (
-	// Secret kind is enum value
+	// SecretKind identifies a Kubernetes Secret reference.
 	SecretKind = NutanixCredentialKind("Secret")
 )
 
+// NutanixCredentialReference identifies a Kubernetes credential Secret.
 // +kubebuilder:object:generate=true
 type NutanixCredentialReference struct {
 	// Kind of the Nutanix credential
@@ -95,8 +101,10 @@ type NutanixCredentialReference struct {
 	Namespace string `json:"namespace"`
 }
 
+// NutanixTrustBundleKind identifies the trust bundle source format.
 type NutanixTrustBundleKind string
 
+// Supported trust bundle source formats.
 const (
 	NutanixTrustBundleKindString    = NutanixTrustBundleKind("String")
 	NutanixTrustBundleKindConfigMap = NutanixTrustBundleKind("ConfigMap")

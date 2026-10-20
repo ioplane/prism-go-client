@@ -2,8 +2,10 @@ package v4
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/nutanix-cloud-native/prism-go-client/converged"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/utils/ptr"
@@ -253,4 +255,26 @@ func TestCallListAPI_EmptyMismatchedSliceReturnsEmpty(t *testing.T) {
 		data: []int{1},
 	}, nil)
 	require.Error(t, err)
+}
+
+func TestNewIterator_YieldsOptionError(t *testing.T) {
+	optionErr := errors.New("invalid OData option")
+	apiCalls := 0
+	iterator := NewIterator[*fakeListResponse, string](
+		context.Background(),
+		func(context.Context, *V4ODataParams) (*fakeListResponse, error) {
+			apiCalls++
+			return &fakeListResponse{}, nil
+		},
+		func(converged.ODataOptions) error { return optionErr },
+	)
+
+	yielded := 0
+	for item, err := range iterator {
+		yielded++
+		assert.Empty(t, item)
+		assert.ErrorIs(t, err, optionErr)
+	}
+	assert.Equal(t, 1, yielded)
+	assert.Zero(t, apiCalls)
 }

@@ -2,12 +2,94 @@ package v4
 
 import (
 	"errors"
+	"net/url"
 	"strconv"
 	"testing"
+	"time"
 
 	prismgoclient "github.com/nutanix-cloud-native/prism-go-client"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestWithReadTimeoutRange(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		minutes int
+		want    time.Duration
+		wantErr bool
+	}{
+		{name: "one minute", minutes: 1, want: time.Minute},
+		{name: "largest whole minute", minutes: 153722867, want: 9223372020000000000},
+		{name: "overflow", minutes: 153722868, want: 2 * time.Minute, wantErr: true},
+		{name: "zero keeps previous setting", minutes: 0, want: 2 * time.Minute},
+		{name: "negative keeps previous setting", minutes: -1, want: 2 * time.Minute},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := &Client{readTimeout: 2 * time.Minute}
+			option := WithReadTimeout(test.minutes)
+			err := option(client)
+			if test.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, test.want, client.readTimeout)
+
+			var configured *Client
+			var cause error
+			created, err := NewV4Client(prismgoclient.Credentials{Endpoint: "fixture.invalid", APIKey: "fixture"},
+				WithReadTimeout(2), func(c *Client) error {
+					configured = c
+					cause = option(c)
+					return cause
+				})
+			if test.wantErr {
+				require.Nil(t, created)
+				require.Error(t, cause)
+				require.ErrorIs(t, err, cause)
+				require.EqualError(t, err, "failed to apply client option: "+cause.Error())
+				require.Equal(t, &Client{readTimeout: test.want}, configured)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, test.want, created.VmApiInstance.ApiClient.ReadTimeout)
+			require.Equal(t, test.want, created.ProtectionPoliciesApiInstance.ApiClient.ReadTimeout)
+		})
+	}
+}
+
+func TestNewV4ClientEndpointDiagnostics(t *testing.T) {
+	const marker = "synthetic-endpoint-secret-marker"
+	const overflowPort = "999999999999999999999999999999"
+	for _, test := range []struct {
+		name     string
+		endpoint string
+		urlError bool
+	}{
+		{name: "invalid host", endpoint: "fixture:" + marker + "@%41.invalid", urlError: true},
+		{name: "invalid port", endpoint: "fixture:" + marker + "@fixture.invalid:invalid", urlError: true},
+		{name: "overflow port", endpoint: "fixture:" + marker + "@fixture.invalid:" + overflowPort},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client, err := NewV4Client(prismgoclient.Credentials{Endpoint: test.endpoint, APIKey: "fixture"})
+			require.Nil(t, client)
+			require.Error(t, err)
+			require.NotContains(t, err.Error(), marker)
+			require.NotContains(t, err.Error(), overflowPort)
+			if test.urlError {
+				var cause *url.Error
+				require.ErrorAs(t, err, &cause)
+				require.Equal(t, "https://"+test.endpoint, cause.URL)
+			} else {
+				var cause *strconv.NumError
+				require.ErrorAs(t, err, &cause)
+				require.Equal(t, overflowPort, cause.Num)
+				require.ErrorIs(t, err, strconv.ErrRange)
+			}
+		})
+	}
+}
 
 func TestNewV4ClientBasicAuth(t *testing.T) {
 	// verifies positive client creation

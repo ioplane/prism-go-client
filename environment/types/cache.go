@@ -8,15 +8,15 @@ import (
 )
 
 var (
-	// ErrorClientNotFound is returned when the client is not found in the cache
+	// ErrorClientNotFound is returned when the client is not found in the cache.
 	ErrorClientNotFound = errors.New("client not found in client cache")
-	// ErrorPrismAddressNotSet is returned when the address is not set for Nutanix Prism Central
+	// ErrorPrismAddressNotSet is returned when the address is not set for Nutanix Prism Central.
 	ErrorPrismAddressNotSet = errors.New("address not set for Nutanix Prism Central")
-	// ErrorPrismPortNotSet is returned when the port is not set for Nutanix Prism Central
+	// ErrorPrismPortNotSet is returned when the port is not set for Nutanix Prism Central.
 	ErrorPrismPortNotSet = errors.New("port not set for Nutanix Prism Central")
-	// ErrorPrismUsernameNotSet is returned when the username is not set for Nutanix Prism Central
+	// ErrorPrismUsernameNotSet is returned when the username is not set for Nutanix Prism Central.
 	ErrorPrismUsernameNotSet = errors.New("username not set for Nutanix Prism Central")
-	// ErrorPrismPasswordNotSet is returned when the password is not set for Nutanix Prism Central
+	// ErrorPrismPasswordNotSet is returned when the password is not set for Nutanix Prism Central.
 	ErrorPrismPasswordNotSet = errors.New("password not set for Nutanix Prism Central")
 )
 
@@ -31,22 +31,22 @@ type CachedClientParams interface {
 	Key() string
 }
 
-type CacheOpts[T any] func(*T)
-type ClientOption[T any] func(*T) error
+// CacheOpts configures a cached client.
+type (
+	CacheOpts[T any] func(*T)
+	// ClientOption configures a client and reports invalid settings.
+	ClientOption[T any] func(*T) error
+)
 
+// GetHash computes the validation hash of the serialized endpoint.
 func (ep ManagementEndpoint) GetHash() (string, error) {
-	// Note: this will only work reliably as long as types.ManagementEndpoint is predictably serializable i.e. does
-	// not contain a map. Due to randomized ordering of map keys in Go, we would constantly invalidate caches
-	// if the ManagementEndpoint has a map.
 	serializedEndpoint, err := json.Marshal(ep)
 	if err != nil {
 		return "", err
 	}
 
-	hasher := sha256.New()
-	hasher.Write(serializedEndpoint)
-	hashedBytes := hasher.Sum(nil)
-	currentValidationHash := hex.EncodeToString(hashedBytes)
+	checksum := sha256.Sum256(serializedEndpoint)
+	currentValidationHash := hex.EncodeToString(checksum[:])
 
 	return currentValidationHash, nil
 }

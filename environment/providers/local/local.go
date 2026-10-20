@@ -1,14 +1,7 @@
+// Package local reads management endpoints, credentials and settings from environment variables.
 package local
 
-/*
- Local environment provider which simply reads management endpoint,
- credentials and settings from OS environment variables.
-
- This environment is meant for local testing.
-*/
-
 import (
-	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -29,57 +22,70 @@ const (
 
 type provider struct{}
 
-func (prov *provider) GetManagementEndpoint(
-	topology types.Topology,
+type endpointParseError struct {
+	cause error
+}
+
+func (*endpointParseError) Error() string { return "error parsing local environment endpoint" }
+
+func (err *endpointParseError) Unwrap() error { return err.cause }
+
+func (*provider) GetManagementEndpoint(
+	_ types.Topology,
 ) (*types.ManagementEndpoint, error) {
 	endpoint := os.Getenv(endpointEnv)
 	// No local environment defined
 	if endpoint == "" {
 		return nil, types.ErrNotFound
 	}
+
 	port := os.Getenv(portEnv)
 	if port == "" {
 		port = "9440"
 	}
-	address := fmt.Sprintf("%s:%s", endpoint, port)
+
+	address := endpoint + ":" + port
 	if !strings.HasPrefix(address, "https://") {
-		address = fmt.Sprintf("https://%s", address)
+		address = "https://" + address
 	}
+
 	addr, err := url.Parse(address)
 	if err != nil {
-		return nil, err
+		return nil, &endpointParseError{cause: err}
 	}
 
 	insecureTLS := os.Getenv(insecureEnv) == "true"
 	trustBundle := os.Getenv(trustBundleEnv)
-	
+
 	credentials := &types.ApiCredentials{
 		Username: os.Getenv(userEnv),
 		Password: os.Getenv(passwordEnv),
 		APIKey:   os.Getenv(apiKeyEnv),
+		KeyPair:  "",
 	}
 	if err := credentials.Validate(); err != nil {
 		return nil, err
 	}
 
 	return &types.ManagementEndpoint{
-		Address: addr,
-		ApiCredentials: *credentials,
+		Address:               addr,
+		ApiCredentials:        *credentials,
 		Insecure:              insecureTLS,
 		AdditionalTrustBundle: trustBundle,
 	}, nil
 }
 
-func (prov *provider) Get(topology types.Topology, key string) (
-	interface{}, error,
+func (*provider) Get(_ types.Topology, key string) (
+	any, error,
 ) {
-	switch key {
-	case types.CategoriesKey:
+	if key == types.CategoriesKey {
 		return strings.Split(os.Getenv(categoriesEnv), ","), nil
 	}
+
 	return nil, types.ErrNotFound
 }
 
+// NewProvider returns a provider backed by local environment variables.
 func NewProvider() types.Provider {
 	return &provider{}
 }

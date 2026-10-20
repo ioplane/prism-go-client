@@ -1,3 +1,4 @@
+// Package certutils provides certificate fixtures for tests.
 package certutils
 
 import (
@@ -12,11 +13,17 @@ import (
 	"time"
 )
 
+const (
+	testCertificateSerialNumber  = 2022
+	testCertificateValidityYears = 10
+	testRSAKeyBits               = 4096
+)
+
 // GenerateCACertForTesting generates a CA Certificate and returns a PEM encoded version of the certificate
 // and a base64 encoded version of the PEM encoded certificate.
 func GenerateCACertForTesting() (string, string, error) {
-	ca := &x509.Certificate{
-		SerialNumber: big.NewInt(2022),
+	certificate := &x509.Certificate{
+		SerialNumber: big.NewInt(testCertificateSerialNumber),
 		Subject: pkix.Name{
 			Organization:  []string{"Nutanix, Inc."},
 			Country:       []string{"US"},
@@ -26,34 +33,37 @@ func GenerateCACertForTesting() (string, string, error) {
 			PostalCode:    []string{"95110"},
 		},
 		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(10, 0, 0),
+		NotAfter:              time.Now().AddDate(testCertificateValidityYears, 0, 0),
 		IsCA:                  true,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
 	}
 
-	// create our private and public key
-	caPrivKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	// Create the private and public key.
+	caPrivKey, err := rsa.GenerateKey(rand.Reader, testRSAKeyBits)
 	if err != nil {
 		return "", "", err
 	}
 
-	// create the CA
-	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivKey.PublicKey, caPrivKey)
+	// Create the CA.
+	caBytes, err := x509.CreateCertificate(rand.Reader, certificate, certificate, &caPrivKey.PublicKey, caPrivKey)
 	if err != nil {
 		return "", "", err
 	}
 
-	// pem encode
+	// PEM encode.
 	caPEM := new(bytes.Buffer)
-	if err := pem.Encode(caPEM, &pem.Block{
+
+	err = pem.Encode(caPEM, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: caBytes,
-	}); err != nil {
+	})
+	if err != nil {
 		return "", "", err
 	}
 
 	b64Cert := base64.StdEncoding.EncodeToString(caPEM.Bytes())
+
 	return caPEM.String(), b64Cert, nil
 }

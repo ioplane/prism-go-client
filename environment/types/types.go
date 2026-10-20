@@ -1,7 +1,8 @@
+// Package types defines environment credentials, endpoint settings and provider contracts.
 package types
 
 import (
-	"fmt"
+	"errors"
 	"net/url"
 )
 
@@ -11,10 +12,8 @@ const (
 	CategoriesKey = "categories"
 )
 
-var (
-	// ErrNotFound is returned by Get() for missing keys
-	ErrNotFound = fmt.Errorf("environment key not found")
-)
+// ErrNotFound is returned by Get() for missing keys.
+var ErrNotFound = errors.New("environment key not found")
 
 // ApiCredentials is set of identifiers and secrets used to authenticate with
 // the underlying infrastructure.
@@ -34,6 +33,7 @@ type ApiCredentials struct {
 type ManagementEndpoint struct {
 	// ApiCredentials embedded into endpoint
 	ApiCredentials
+
 	// Address is URL of management endpoint
 	Address *url.URL `json:"address,omitempty"`
 	// Whether to authenticate TLS endpoint in case of HTTPS as transport.
@@ -47,7 +47,7 @@ type ManagementEndpoint struct {
 
 // Topology is a map of topological domains to topological segments.
 // A topological domain is a sub-division of a cluster, like "region",
-// "zone", "rack", etc
+// "zone", "rack", etc.
 type Topology map[string]string
 
 // Environment in which a Kubernetes has been deployed.
@@ -59,17 +59,18 @@ type Environment interface {
 	// assigned to.
 	// These settings might have to be explicitly propagated to resources.
 	// Return whether lookup was successful to distinguish from nil as value.
-	Get(topology Topology, key string) (interface{}, error)
+	Get(topology Topology, key string) (any, error)
 }
 
-// Provider of an environment
+// Provider of an environment.
 type Provider interface {
 	Environment
 }
 
+// Validate checks the supported basic-auth or API-key credential shape.
 func (c *ApiCredentials) Validate() error {
 	if c == nil {
-		return fmt.Errorf("credentials must not be nil")
+		return errors.New("credentials must not be nil")
 	}
 
 	hasUsername := c.Username != ""
@@ -81,12 +82,12 @@ func (c *ApiCredentials) Validate() error {
 
 	// 1) mutual exclusion
 	if hasAPIKey && hasAnyBasic {
-		return fmt.Errorf("basic auth (username/password) and API key cannot be set simultaneously")
+		return errors.New("basic auth (username/password) and API key cannot be set simultaneously")
 	}
 
 	// 2) required auth shape
 	if !hasAPIKey && !hasCompleteBasic {
-		return fmt.Errorf("either username and password, or an API key must be set in provider configuration")
+		return errors.New("either username and password, or an API key must be set in provider configuration")
 	}
 
 	return nil

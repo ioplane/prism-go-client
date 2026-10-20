@@ -1,11 +1,10 @@
 package v3
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	prismgoclient "github.com/nutanix-cloud-native/prism-go-client"
@@ -14,32 +13,53 @@ import (
 
 type clientCacheMap map[string]*Client
 
-// ClientCache is a cache for prism clients
+type clientCreation struct {
+	done chan struct{}
+	hash string
+	err  error
+}
+
+func (p *clientCreation) wait(ctx context.Context, hash string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-p.done:
+		if p.hash == hash {
+			return p.err
+		}
+
+		return nil
+	}
+}
+
+// ClientCache is a cache for prism clients.
 type ClientCache struct {
 	cache            clientCacheMap
 	validationHashes map[string]string
+	creating         map[string]*clientCreation
 	mtx              sync.RWMutex
 
 	useSessionAuth bool
 }
 
-// CacheOpts is a functional option for the ClientCache
+// CacheOpts is a functional option for the ClientCache.
 type CacheOpts func(*ClientCache)
 
 // WithSessionAuth sets the session auth for the ClientCache
 // If sessionAuth is true, the client will use session auth instead of basic auth for authentication of requests
-// If sessionAuth is false, the client will use basic auth for authentication of requests
+// If sessionAuth is false, the client will use basic auth for authentication of requests.
 func WithSessionAuth(sessionAuth bool) CacheOpts {
 	return func(c *ClientCache) {
 		c.useSessionAuth = sessionAuth
 	}
 }
 
-// NewClientCache returns a new ClientCache
+// NewClientCache returns a new ClientCache.
 func NewClientCache(opts ...CacheOpts) *ClientCache {
 	cache := &ClientCache{
 		cache:            make(clientCacheMap),
 		validationHashes: make(map[string]string),
+		creating:         make(map[string]*clientCreation),
 		mtx:              sync.RWMutex{},
 	}
 
@@ -50,37 +70,122 @@ func NewClientCache(opts ...CacheOpts) *ClientCache {
 	return cache
 }
 
-// GetOrCreate returns the client for the given client name and endpoint.
-// - If the client is not found in the cache, it creates a new client, adds it to the cache, and returns it
-// - If the client is found in the cache, it validates whether the client is still valid by comparing validation hashes
-// - If the client is found in the cache and the validation hash is the same, it returns the client
-// - If the client is found in the cache and the validation hash is different, it regenerates the client, updates the cache, and returns the client
-// func (c *ClientCache) GetOrCreate(clientName string, endpoint types.ManagementEndpoint, opts ...ClientOption) (*Client, error) {
-func (c *ClientCache) GetOrCreate(cachedClientParams types.CachedClientParams, opts ...types.ClientOption[Client]) (*Client, error) {
-	currentValidationHash, err := validationHashFromEndpoint(cachedClientParams.ManagementEndpoint())
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate validation hash for cachedClientParams with key %s: %w", cachedClientParams.Key(), err)
+// GetOrCreate uses Background; use GetOrCreateWithContext for cancelable creation.
+// Options from the first successful publication win until endpoint change or Delete.
+func (c *ClientCache) GetOrCreate(params types.CachedClientParams, opts ...types.ClientOption[Client]) (*Client, error) {
+	return c.GetOrCreateWithContext(context.Background(), params, opts...)
+}
+
+// GetOrCreateWithContext serializes constructors per key, without holding the cache lock during I/O.
+// Callers must keep params and option inputs immutable for the duration of the call.
+func (c *ClientCache) GetOrCreateWithContext(ctx context.Context, params types.CachedClientParams, opts ...types.ClientOption[Client]) (*Client, error) {
+	if ctx == nil {
+		return nil, errors.New("context must not be nil")
 	}
 
-	client, validationHash, err := c.get(cachedClientParams.Key())
+	key, endpoint := params.Key(), params.ManagementEndpoint()
+	if err := validateManagementEndpoint(endpoint, key); err != nil {
+		return nil, err
+	}
+
+	hash, err := endpoint.GetHash()
 	if err != nil {
-		if !errors.Is(err, types.ErrorClientNotFound) {
-			return nil, fmt.Errorf("failed to get client with key %s from cache: %w", cachedClientParams.Key(), err)
+		return nil, fmt.Errorf("failed to calculate validation hash for cachedClientParams with key %s: %w", key, err)
+	}
+
+	return c.acquireClient(ctx, key, endpoint, hash, opts)
+}
+
+// Delete invalidates the cached entry and any pending publication for its key.
+func (c *ClientCache) Delete(params types.CachedClientParams) {
+	key := params.Key()
+
+	c.mtx.Lock()
+	retired := c.cache[key]
+	delete(c.cache, key)
+	delete(c.validationHashes, key)
+	delete(c.creating, key)
+	c.mtx.Unlock()
+	retired.closeIdleConnections()
+}
+
+func (c *ClientCache) acquireClient(
+	ctx context.Context, key string, endpoint types.ManagementEndpoint, hash string, opts []types.ClientOption[Client],
+) (*Client, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		if client, cachedHash, err := c.get(key); err == nil && client != nil && cachedHash == hash {
+			return client, nil
+		}
+
+		c.mtx.Lock()
+		if client := c.cache[key]; client != nil && c.validationHashes[key] == hash {
+			c.mtx.Unlock()
+
+			return client, nil
+		}
+
+		pending := c.creating[key]
+		if pending == nil {
+			pending = &clientCreation{done: make(chan struct{}), hash: hash}
+			c.creating[key] = pending
+			c.mtx.Unlock()
+
+			return c.create(ctx, key, endpoint, opts, pending)
+		}
+		c.mtx.Unlock()
+
+		if err := pending.wait(ctx, hash); err != nil {
+			return nil, err
+		}
+	}
+}
+
+func (c *ClientCache) create(
+	ctx context.Context, key string, endpoint types.ManagementEndpoint, opts []types.ClientOption[Client], pending *clientCreation,
+) (*Client, error) {
+	client, err := c.newClient(ctx, key, endpoint, opts...)
+	c.mtx.Lock()
+
+	var retired *Client
+
+	if c.creating[key] != pending {
+		err = fmt.Errorf("cache entry invalidated during creation: %w", types.ErrorClientNotFound)
+	} else {
+		delete(c.creating, key)
+
+		if err == nil {
+			err = ctx.Err()
+		}
+
+		if err == nil {
+			retired = c.cache[key]
+			c.cache[key], c.validationHashes[key] = client, pending.hash
 		}
 	}
 
-	if validationHash == currentValidationHash {
-		// validation hash is the same, return the client
-		return client, nil
+	pending.err = err
+	close(pending.done)
+	c.mtx.Unlock()
+
+	if err != nil {
+		client.closeIdleConnections()
+
+		return nil, err
 	}
 
-	// validation hash is different, regenerate the client
-	c.Delete(cachedClientParams)
+	retired.closeIdleConnections()
 
-	// Cache the management endpoint to avoid multiple calls and enable defensive checks
-	managementEndpoint := cachedClientParams.ManagementEndpoint()
+	return client, nil
+}
 
-	if err := validateManagementEndpoint(managementEndpoint, cachedClientParams.Key()); err != nil {
+func (c *ClientCache) newClient(
+	ctx context.Context, key string, managementEndpoint types.ManagementEndpoint, opts ...types.ClientOption[Client],
+) (*Client, error) {
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
@@ -95,38 +200,21 @@ func (c *ClientCache) GetOrCreate(cachedClientParams types.CachedClientParams, o
 	}
 
 	setDefaultsForCredentials(&credentials)
-	if err := validateCredentials(credentials, cachedClientParams.Key()); err != nil {
-		return nil, fmt.Errorf("failed to validate credentials for cachedClientParams with key %s: %w", cachedClientParams.Key(), err)
+
+	if err := validateCredentials(credentials, key); err != nil {
+		return nil, fmt.Errorf("failed to validate credentials for cachedClientParams with key %s: %w", key, err)
 	}
 
 	if managementEndpoint.AdditionalTrustBundle != "" {
-		opts = append(opts, WithPEMEncodedCertBundle([]byte(managementEndpoint.AdditionalTrustBundle)))
+		opts = append(slices.Clone(opts), WithPEMEncodedCertBundle([]byte(managementEndpoint.AdditionalTrustBundle)))
 	}
 
-	client, err = NewV3Client(credentials, opts...)
+	client, err := NewV3ClientWithContext(ctx, credentials, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client for cachedClientParams with key %s: %w", cachedClientParams.Key(), err)
+		return nil, fmt.Errorf("failed to create client for cachedClientParams with key %s: %w", key, err)
 	}
 
-	c.set(cachedClientParams.Key(), currentValidationHash, client)
 	return client, nil
-}
-
-func validationHashFromEndpoint(endpoint types.ManagementEndpoint) (string, error) {
-	// Note: this will only work reliably as long as types.ManagementEndpoint is predictably serializable i.e. does
-	// not contain a map. Due to randomized ordering of map keys in Go, we would constantly invalidate caches
-	// if the ManagementEndpoint has a map.
-	serializedEndpoint, err := json.Marshal(endpoint)
-	if err != nil {
-		return "", err
-	}
-
-	hasher := sha256.New()
-	hasher.Write(serializedEndpoint)
-	hashedBytes := hasher.Sum(nil)
-	currentValidationHash := hex.EncodeToString(hashedBytes)
-
-	return currentValidationHash, nil
 }
 
 func setDefaultsForCredentials(credentials *prismgoclient.Credentials) {
@@ -161,38 +249,26 @@ func validateCredentials(credentials prismgoclient.Credentials, key string) erro
 	return nil
 }
 
-// Get returns the client and the validation hash for the given client name
+// get returns the client and the validation hash for the given client name.
 func (c *ClientCache) get(clientName string) (*Client, string, error) {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
 
-	clnt, ok := c.cache[clientName]
-	if !ok {
+	clnt, valueOK := c.cache[clientName]
+	if !valueOK {
 		return nil, "", types.ErrorClientNotFound
 	}
 
-	validationHash, ok := c.validationHashes[clientName]
-	if !ok {
+	validationHash, valueOK := c.validationHashes[clientName]
+	if !valueOK {
 		return clnt, "", nil
 	}
 
 	return clnt, validationHash, nil
 }
 
-// Set adds the client to the cache
-func (c *ClientCache) set(clientName string, validationHash string, client *Client) {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
-
-	c.cache[clientName] = client
-	c.validationHashes[clientName] = validationHash
-}
-
-// Delete removes the client from the cache
-func (c *ClientCache) Delete(params types.CachedClientParams) {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
-
-	delete(c.cache, params.Key())
-	delete(c.validationHashes, params.Key())
+func (c *Client) closeIdleConnections() {
+	if c != nil && c.client != nil {
+		c.client.CloseIdleConnections()
+	}
 }
