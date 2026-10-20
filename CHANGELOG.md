@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The pinned development image uses golangci-lint v2.15.0 with the existing six-linter configuration and Go 1.27.2; the maximum-profile draft remains separate.
+
 - Make and Compose development containers run as UID 65532 with read-only SDK source mounts and the same separate writable SDK module, build and lint caches. Compose builds require the current commit SHA for image provenance. The existing gofmt checks and all declared test, module and vulnerability gates remain enabled.
 
 - Fork pull request titles and descriptions and new commit messages use English; commit titles retain declarative Conventional Commits.

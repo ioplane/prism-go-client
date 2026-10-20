@@ -30,7 +30,7 @@ The development image runs as UID 65532 with read-only source mounts and
 SDK-specific writable caches through both Make and Compose. The blocking checks
 cover module consistency,
 transport regressions, all offline unit packages with race detection, vet/build
-and root-module govulncheck. The lint gate applies the committed `.golangci.yaml`
+and root-module govulncheck. The golangci-lint v2.15.0 gate applies the committed `.golangci.yaml`
 to the root module, hidden `.ci` package and independent `nusights` module.
 The independent `nusights` module has an explicit tidy/verify, compiler,
 vet/build and module-level vulnerability gate; it has no unit tests.
