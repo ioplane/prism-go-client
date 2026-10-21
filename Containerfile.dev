@@ -2,18 +2,18 @@
 FROM docker.io/golangci/golangci-lint@sha256:fbfcfd12a6f8d7f1b97b3362ca80fc2a244d46863148c73cb88e7793af96c481 AS lint-binary
 USER 65532:65532
 
-# Go 1.27.2, Debian trixie; keep the readable version adjacent to its immutable pin.
-FROM docker.io/library/golang@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e AS dev
+# Go 1.27.3, Debian trixie; keep the readable version adjacent to its immutable pin.
+FROM docker.io/library/golang@sha256:1896654cfc5c2b5ad74c07f29cb36f5d2d1cbed42e3054070fbfe444e521e83c AS dev
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.title="Prism SDK development" \
       org.opencontainers.image.description="Pinned Go environment for isolated SDK regression tests" \
       org.opencontainers.image.source="https://github.com/ioplane/prism-go-client" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
-      org.opencontainers.image.version="go1.27.2" \
+      org.opencontainers.image.version="go1.27.3" \
       org.opencontainers.image.created="2026-10-16T00:00:00Z" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.base.name="docker.io/library/golang:1.27.2-trixie" \
-      org.opencontainers.image.base.digest="sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e"
+      org.opencontainers.image.base.name="docker.io/library/golang:1.27.3-trixie" \
+      org.opencontainers.image.base.digest="sha256:1896654cfc5c2b5ad74c07f29cb36f5d2d1cbed42e3054070fbfe444e521e83c"
 ENV GOFLAGS="-mod=readonly -buildvcs=false" GOTOOLCHAIN=local GOENV=off \
     GOPROXY=https://proxy.golang.org,direct GOSUMDB=sum.golang.org \
     GOCACHE=/cache/build GOMODCACHE=/cache/modules CGO_ENABLED=1 \

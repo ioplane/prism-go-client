@@ -73,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- The root and independent nusights modules prefer Go 1.27.3, and the pinned development compiler uses the crypto/x509 patch for GO-2026-6809; the Go 1.27.0 language floor is unchanged.
+
 - Request-path parse errors and HTTP client transport errors now use constant diagnostics instead of echoing URLs and query values. Migration: replace direct `*url.Error` assertions with `errors.As`; `errors.Is`, direct `net.Error` timeout/temporary classification and `os.IsTimeout` remain supported. Retained URLs and unwrapped causes may contain credentials and must not be logged.
 
 - Secret-directory environment endpoint parse errors now use constant diagnostics instead of echoing endpoint contents, including userinfo and query values. Migration: use `errors.As` with `*url.Error` instead of matching raw parser text; the retained `URL` and unwrapped cause may contain credentials and must not be logged.

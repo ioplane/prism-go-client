@@ -8,7 +8,7 @@ Go client for Nutanix Prism APIs. Currently includes the following APIs:
 
 ## Fork development
 
-The `ioplane` fork requires Go 1.27.0 and uses the pinned Go 1.27.2 Podman
+The `ioplane` fork requires Go 1.27.0 and uses the pinned Go 1.27.3 Podman
 image for every check. Earlier Go consumers must update their toolchain before
 using this fork. Public SDK methods and module import paths are retained.
 
