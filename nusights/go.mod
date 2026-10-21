@@ -2,7 +2,7 @@ module github.com/nutanix-cloud-native/prism-go-client/nusights
 
 go 1.27.0
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
 	github.com/go-openapi/errors v0.22.0

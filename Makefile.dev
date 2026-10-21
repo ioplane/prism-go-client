@@ -28,6 +28,7 @@ lint:
 	$(DEV_RUN) sh -ec 'cd nusights; golangci-lint run ./...'
 
 build:
+	$(DEV_RUN) go version
 	$(DEV_RUN) go build ./...
 mod-check:
 	$(DEV_RUN) go mod tidy -diff
